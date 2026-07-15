@@ -19,37 +19,37 @@ public final class Snapshot: Sendable {
     }
 
     /// Retrieves the value for a key as of this snapshot.
-    public func get(_ key: Data, in keyspace: some KeyspaceRef) throws -> Data? {
+    public func get(_ key: Data, in keyspace: some KeyspaceRef) throws(FjallError) -> Data? {
         try fjallCall { try ffi.get(keyspace: keyspace.base.ffi, key: key) }
     }
 
     /// Returns `true` if the key exists in this snapshot.
-    public func containsKey(_ key: Data, in keyspace: some KeyspaceRef) throws -> Bool {
+    public func containsKey(_ key: Data, in keyspace: some KeyspaceRef) throws(FjallError) -> Bool {
         try fjallCall { try ffi.containsKey(keyspace: keyspace.base.ffi, key: key) }
     }
 
     /// Size of the value for a key in bytes as of this snapshot.
-    public func size(of key: Data, in keyspace: some KeyspaceRef) throws -> Int? {
+    public func size(of key: Data, in keyspace: some KeyspaceRef) throws(FjallError) -> Int? {
         try fjallCall { try ffi.sizeOf(keyspace: keyspace.base.ffi, key: key) }.map(Int.init)
     }
 
     /// Exact number of items in this snapshot (full O(n) scan).
-    public func count(of keyspace: some KeyspaceRef) throws -> Int {
+    public func count(of keyspace: some KeyspaceRef) throws(FjallError) -> Int {
         Int(try fjallCall { try ffi.len(keyspace: keyspace.base.ffi) })
     }
 
     /// Returns `true` if the keyspace is empty in this snapshot.
-    public func isEmpty(_ keyspace: some KeyspaceRef) throws -> Bool {
+    public func isEmpty(_ keyspace: some KeyspaceRef) throws(FjallError) -> Bool {
         try fjallCall { try ffi.isEmpty(keyspace: keyspace.base.ffi) }
     }
 
     /// The first (minimum) key-value pair in this snapshot.
-    public func first(in keyspace: some KeyspaceRef) throws -> KeyValuePair? {
+    public func first(in keyspace: some KeyspaceRef) throws(FjallError) -> KeyValuePair? {
         try fjallCall { try ffi.firstKeyValue(keyspace: keyspace.base.ffi) }.map(KeyValuePair.init)
     }
 
     /// The last (maximum) key-value pair in this snapshot.
-    public func last(in keyspace: some KeyspaceRef) throws -> KeyValuePair? {
+    public func last(in keyspace: some KeyspaceRef) throws(FjallError) -> KeyValuePair? {
         try fjallCall { try ffi.lastKeyValue(keyspace: keyspace.base.ffi) }.map(KeyValuePair.init)
     }
 
@@ -81,17 +81,17 @@ public final class Snapshot: Sendable {
 
 extension Snapshot {
     /// Retrieves the value for a UTF-8 string key as of this snapshot.
-    public func get(_ key: String, in keyspace: some KeyspaceRef) throws -> Data? {
+    public func get(_ key: String, in keyspace: some KeyspaceRef) throws(FjallError) -> Data? {
         try get(Data(key.utf8), in: keyspace)
     }
 
     /// Retrieves the value for a UTF-8 string key, decoded as a UTF-8 string.
-    public func getString(_ key: String, in keyspace: some KeyspaceRef) throws -> String? {
+    public func getString(_ key: String, in keyspace: some KeyspaceRef) throws(FjallError) -> String? {
         try get(key, in: keyspace).map { String(decoding: $0, as: UTF8.self) }
     }
 
     /// Returns `true` if the UTF-8 string key exists in this snapshot.
-    public func containsKey(_ key: String, in keyspace: some KeyspaceRef) throws -> Bool {
+    public func containsKey(_ key: String, in keyspace: some KeyspaceRef) throws(FjallError) -> Bool {
         try containsKey(Data(key.utf8), in: keyspace)
     }
 

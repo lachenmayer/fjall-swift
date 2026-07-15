@@ -170,7 +170,8 @@ let blobs = try db.keyspace(
 
 ### Error handling
 
-All fallible operations throw ``FjallError``, which mirrors `fjall::Error`:
+All fallible operations use typed throws (`throws(FjallError)`), so the error type is
+part of the signature and `catch` can be exhaustive. `FjallError` mirrors `fjall::Error`:
 
 ```swift
 do {
@@ -178,9 +179,13 @@ do {
 } catch FjallError.locked {
     // another process has the database open
 } catch {
-    // .io, .storage, .poisoned, ...
+    // .io, .storage, .poisoned, ... — `error` is a FjallError, not `any Error`
 }
 ```
+
+The only exceptions are APIs that run *your* closure — `db.write { … }` and
+`Iter.forEach` — which rethrow whatever the closure throws and are therefore
+untyped `throws`.
 
 ## Architecture
 

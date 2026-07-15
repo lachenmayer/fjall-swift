@@ -37,7 +37,7 @@ public final class Iter {
     }
 
     /// Returns the next pair from the front, or `nil` when the iterator is exhausted.
-    public func next() throws -> KeyValuePair? {
+    public func next() throws(FjallError) -> KeyValuePair? {
         if frontIndex < front.count {
             defer { frontIndex += 1 }
             return KeyValuePair(front[frontIndex])
@@ -61,7 +61,7 @@ public final class Iter {
 
     /// Returns the next pair from the back (i.e. in descending key order),
     /// or `nil` when the iterator is exhausted.
-    public func nextBack() throws -> KeyValuePair? {
+    public func nextBack() throws(FjallError) -> KeyValuePair? {
         if backIndex < back.count {
             defer { backIndex += 1 }
             return KeyValuePair(back[backIndex])
@@ -84,7 +84,7 @@ public final class Iter {
     }
 
     /// Collects all remaining pairs (from the front) into an array.
-    public func collect() throws -> [KeyValuePair] {
+    public func collect() throws(FjallError) -> [KeyValuePair] {
         var result: [KeyValuePair] = []
         while let pair = try next() {
             result.append(pair)
@@ -93,7 +93,7 @@ public final class Iter {
     }
 
     /// Collects all remaining pairs from the back (descending key order) into an array.
-    public func collectReversed() throws -> [KeyValuePair] {
+    public func collectReversed() throws(FjallError) -> [KeyValuePair] {
         var result: [KeyValuePair] = []
         while let pair = try nextBack() {
             result.append(pair)

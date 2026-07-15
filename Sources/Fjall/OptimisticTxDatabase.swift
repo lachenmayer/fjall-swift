@@ -22,20 +22,20 @@ public final class OptimisticTxDatabase: Sendable {
     let ffi: FfiOptimisticTxDatabase
 
     /// Opens (or creates) an optimistic transactional database at the given path.
-    public init(path: String, options: Database.Options = .init()) throws {
+    public init(path: String, options: Database.Options = .init()) throws(FjallError) {
         self.ffi = try fjallCall {
             try FfiOptimisticTxDatabase.open(path: path, config: options.ffi)
         }
     }
 
     /// Opens (or creates) an optimistic transactional database at the given file URL.
-    public convenience init(url: URL, options: Database.Options = .init()) throws {
+    public convenience init(url: URL, options: Database.Options = .init()) throws(FjallError) {
         try self.init(path: url.path, options: options)
     }
 
     /// Opens a transactional keyspace, creating it (with the given options)
     /// if it does not exist.
-    public func keyspace(_ name: String, options: Keyspace.Options = .init()) throws
+    public func keyspace(_ name: String, options: Keyspace.Options = .init()) throws(FjallError)
         -> OptimisticTxKeyspace
     {
         OptimisticTxKeyspace(
@@ -66,7 +66,7 @@ public final class OptimisticTxDatabase: Sendable {
     ///
     /// Prefer the scoped ``write(attempts:_:)`` variant, which commits,
     /// rolls back, and retries conflicts automatically.
-    public func writeTransaction() throws -> OptimisticWriteTransaction {
+    public func writeTransaction() throws(FjallError) -> OptimisticWriteTransaction {
         OptimisticWriteTransaction(ffi: try fjallCall { try ffi.writeTx() })
     }
 
@@ -105,13 +105,13 @@ public final class OptimisticTxDatabase: Sendable {
     }
 
     /// Persists the journal to disk with the given durability level.
-    public func persist(_ mode: PersistMode) throws {
+    public func persist(_ mode: PersistMode) throws(FjallError) {
         try fjallCall { try ffi.persist(mode: mode.ffi) }
     }
 
     /// Total disk space used by the database, in bytes.
     public var diskSpace: UInt64 {
-        get throws { try fjallCall { try ffi.diskSpace() } }
+        get throws(FjallError) { try fjallCall { try ffi.diskSpace() } }
     }
 
     /// Number of journal files.
@@ -149,48 +149,48 @@ public final class OptimisticTxKeyspace: Sendable {
     public var path: String { ffi.path() }
 
     /// Inserts a key-value pair (as its own transaction).
-    public func insert(_ key: Data, _ value: Data) throws {
+    public func insert(_ key: Data, _ value: Data) throws(FjallError) {
         try fjallCall { try ffi.insert(key: key, value: value) }
     }
 
     /// Retrieves the value for a key.
-    public func get(_ key: Data) throws -> Data? {
+    public func get(_ key: Data) throws(FjallError) -> Data? {
         try fjallCall { try ffi.get(key: key) }
     }
 
     /// Removes a key (as its own transaction).
-    public func remove(_ key: Data) throws {
+    public func remove(_ key: Data) throws(FjallError) {
         try fjallCall { try ffi.remove(key: key) }
     }
 
     /// Removes a key with a weak tombstone (experimental; see fjall docs).
-    public func removeWeak(_ key: Data) throws {
+    public func removeWeak(_ key: Data) throws(FjallError) {
         try fjallCall { try ffi.removeWeak(key: key) }
     }
 
     /// Atomically removes an item and returns its value, if it existed.
-    public func take(_ key: Data) throws -> Data? {
+    public func take(_ key: Data) throws(FjallError) -> Data? {
         try fjallCall { try ffi.take(key: key) }
     }
 
     /// Returns `true` if the key exists.
-    public func containsKey(_ key: Data) throws -> Bool {
+    public func containsKey(_ key: Data) throws(FjallError) -> Bool {
         try fjallCall { try ffi.containsKey(key: key) }
     }
 
     /// Size of the value for a key in bytes, without fetching it.
-    public func size(of key: Data) throws -> Int? {
+    public func size(of key: Data) throws(FjallError) -> Int? {
         try fjallCall { try ffi.sizeOf(key: key) }.map(Int.init)
     }
 
     /// The first (minimum) key-value pair.
     public var first: KeyValuePair? {
-        get throws { try fjallCall { try ffi.firstKeyValue() }.map(KeyValuePair.init) }
+        get throws(FjallError) { try fjallCall { try ffi.firstKeyValue() }.map(KeyValuePair.init) }
     }
 
     /// The last (maximum) key-value pair.
     public var last: KeyValuePair? {
-        get throws { try fjallCall { try ffi.lastKeyValue() }.map(KeyValuePair.init) }
+        get throws(FjallError) { try fjallCall { try ffi.lastKeyValue() }.map(KeyValuePair.init) }
     }
 
     /// Fast approximation of the number of items (O(1), may overcount).
@@ -205,42 +205,42 @@ extension OptimisticTxKeyspace: KeyspaceRef {}
 
 extension OptimisticTxKeyspace {
     /// Inserts a UTF-8 string key-value pair (as its own transaction).
-    public func insert(_ key: String, _ value: String) throws {
+    public func insert(_ key: String, _ value: String) throws(FjallError) {
         try insert(Data(key.utf8), Data(value.utf8))
     }
 
     /// Inserts a value for a UTF-8 string key (as its own transaction).
-    public func insert(_ key: String, _ value: Data) throws {
+    public func insert(_ key: String, _ value: Data) throws(FjallError) {
         try insert(Data(key.utf8), value)
     }
 
     /// Retrieves the value for a UTF-8 string key.
-    public func get(_ key: String) throws -> Data? {
+    public func get(_ key: String) throws(FjallError) -> Data? {
         try get(Data(key.utf8))
     }
 
     /// Retrieves the value for a UTF-8 string key, decoded as a UTF-8 string.
-    public func getString(_ key: String) throws -> String? {
+    public func getString(_ key: String) throws(FjallError) -> String? {
         try get(key).map { String(decoding: $0, as: UTF8.self) }
     }
 
     /// Removes a UTF-8 string key (as its own transaction).
-    public func remove(_ key: String) throws {
+    public func remove(_ key: String) throws(FjallError) {
         try remove(Data(key.utf8))
     }
 
     /// Atomically removes a UTF-8 string key and returns its value.
-    public func take(_ key: String) throws -> Data? {
+    public func take(_ key: String) throws(FjallError) -> Data? {
         try take(Data(key.utf8))
     }
 
     /// Returns `true` if the UTF-8 string key exists.
-    public func containsKey(_ key: String) throws -> Bool {
+    public func containsKey(_ key: String) throws(FjallError) -> Bool {
         try containsKey(Data(key.utf8))
     }
 
     /// Size of the value for a UTF-8 string key, in bytes.
-    public func size(of key: String) throws -> Int? {
+    public func size(of key: String) throws(FjallError) -> Int? {
         try size(of: Data(key.utf8))
     }
 }
@@ -260,42 +260,42 @@ public final class OptimisticWriteTransaction: Sendable {
     // MARK: Reading (sees own writes)
 
     /// Retrieves the value for a key, seeing the transaction's own writes.
-    public func get(_ key: Data, in keyspace: OptimisticTxKeyspace) throws -> Data? {
+    public func get(_ key: Data, in keyspace: OptimisticTxKeyspace) throws(FjallError) -> Data? {
         try fjallCall { try ffi.get(keyspace: keyspace.ffi, key: key) }
     }
 
     /// Returns `true` if the key exists.
-    public func containsKey(_ key: Data, in keyspace: OptimisticTxKeyspace) throws -> Bool {
+    public func containsKey(_ key: Data, in keyspace: OptimisticTxKeyspace) throws(FjallError) -> Bool {
         try fjallCall { try ffi.containsKey(keyspace: keyspace.ffi, key: key) }
     }
 
     /// Size of the value for a key in bytes.
-    public func size(of key: Data, in keyspace: OptimisticTxKeyspace) throws -> Int? {
+    public func size(of key: Data, in keyspace: OptimisticTxKeyspace) throws(FjallError) -> Int? {
         try fjallCall { try ffi.sizeOf(keyspace: keyspace.ffi, key: key) }.map(Int.init)
     }
 
     /// Exact number of items visible to this transaction (full O(n) scan).
-    public func count(of keyspace: OptimisticTxKeyspace) throws -> Int {
+    public func count(of keyspace: OptimisticTxKeyspace) throws(FjallError) -> Int {
         Int(try fjallCall { try ffi.len(keyspace: keyspace.ffi) })
     }
 
     /// Returns `true` if the keyspace is empty as seen by this transaction.
-    public func isEmpty(_ keyspace: OptimisticTxKeyspace) throws -> Bool {
+    public func isEmpty(_ keyspace: OptimisticTxKeyspace) throws(FjallError) -> Bool {
         try fjallCall { try ffi.isEmpty(keyspace: keyspace.ffi) }
     }
 
     /// The first (minimum) key-value pair visible to this transaction.
-    public func first(in keyspace: OptimisticTxKeyspace) throws -> KeyValuePair? {
+    public func first(in keyspace: OptimisticTxKeyspace) throws(FjallError) -> KeyValuePair? {
         try fjallCall { try ffi.firstKeyValue(keyspace: keyspace.ffi) }.map(KeyValuePair.init)
     }
 
     /// The last (maximum) key-value pair visible to this transaction.
-    public func last(in keyspace: OptimisticTxKeyspace) throws -> KeyValuePair? {
+    public func last(in keyspace: OptimisticTxKeyspace) throws(FjallError) -> KeyValuePair? {
         try fjallCall { try ffi.lastKeyValue(keyspace: keyspace.ffi) }.map(KeyValuePair.init)
     }
 
     /// Iterates over the keyspace, including the transaction's own writes.
-    public func iter(_ keyspace: OptimisticTxKeyspace, batchSize: Int = 32) throws -> Iter {
+    public func iter(_ keyspace: OptimisticTxKeyspace, batchSize: Int = 32) throws(FjallError) -> Iter {
         Iter(ffi: try fjallCall { try ffi.iter(keyspace: keyspace.ffi) }, batchSize: batchSize)
     }
 
@@ -305,7 +305,7 @@ public final class OptimisticWriteTransaction: Sendable {
         from lower: Bound? = nil,
         to upper: Bound? = nil,
         batchSize: Int = 32
-    ) throws -> Iter {
+    ) throws(FjallError) -> Iter {
         Iter(
             ffi: try fjallCall {
                 try ffi.range(keyspace: keyspace.ffi, lower: lower?.ffi, upper: upper?.ffi)
@@ -328,22 +328,22 @@ public final class OptimisticWriteTransaction: Sendable {
     // MARK: Writing
 
     /// Stages an insert.
-    public func insert(_ key: Data, _ value: Data, into keyspace: OptimisticTxKeyspace) throws {
+    public func insert(_ key: Data, _ value: Data, into keyspace: OptimisticTxKeyspace) throws(FjallError) {
         try fjallCall { try ffi.insert(keyspace: keyspace.ffi, key: key, value: value) }
     }
 
     /// Stages a removal.
-    public func remove(_ key: Data, from keyspace: OptimisticTxKeyspace) throws {
+    public func remove(_ key: Data, from keyspace: OptimisticTxKeyspace) throws(FjallError) {
         try fjallCall { try ffi.remove(keyspace: keyspace.ffi, key: key) }
     }
 
     /// Stages a weak removal (experimental; see fjall docs).
-    public func removeWeak(_ key: Data, from keyspace: OptimisticTxKeyspace) throws {
+    public func removeWeak(_ key: Data, from keyspace: OptimisticTxKeyspace) throws(FjallError) {
         try fjallCall { try ffi.removeWeak(keyspace: keyspace.ffi, key: key) }
     }
 
     /// Removes an item and returns its value, if it existed.
-    public func take(_ key: Data, from keyspace: OptimisticTxKeyspace) throws -> Data? {
+    public func take(_ key: Data, from keyspace: OptimisticTxKeyspace) throws(FjallError) -> Data? {
         try fjallCall { try ffi.take(keyspace: keyspace.ffi, key: key) }
     }
 
@@ -352,7 +352,7 @@ public final class OptimisticWriteTransaction: Sendable {
     /// Sets the durability level used when the transaction commits.
     /// Pass `nil` to not persist eagerly on commit.
     @discardableResult
-    public func durability(_ mode: PersistMode?) throws -> OptimisticWriteTransaction {
+    public func durability(_ mode: PersistMode?) throws(FjallError) -> OptimisticWriteTransaction {
         try fjallCall { try ffi.setDurability(mode: mode?.ffi) }
         return self
     }
@@ -361,12 +361,12 @@ public final class OptimisticWriteTransaction: Sendable {
     ///
     /// Throws ``FjallError/conflict`` if another transaction modified the
     /// same keys since this transaction started.
-    public func commit() throws {
+    public func commit() throws(FjallError) {
         try fjallCall { try ffi.commit() }
     }
 
     /// Rolls the transaction back, discarding all staged changes.
-    public func rollback() throws {
+    public func rollback() throws(FjallError) {
         try fjallCall { try ffi.rollback() }
     }
 }
@@ -375,38 +375,38 @@ public final class OptimisticWriteTransaction: Sendable {
 
 extension OptimisticWriteTransaction {
     /// Retrieves the value for a UTF-8 string key.
-    public func get(_ key: String, in keyspace: OptimisticTxKeyspace) throws -> Data? {
+    public func get(_ key: String, in keyspace: OptimisticTxKeyspace) throws(FjallError) -> Data? {
         try get(Data(key.utf8), in: keyspace)
     }
 
     /// Retrieves the value for a UTF-8 string key, decoded as a UTF-8 string.
-    public func getString(_ key: String, in keyspace: OptimisticTxKeyspace) throws -> String? {
+    public func getString(_ key: String, in keyspace: OptimisticTxKeyspace) throws(FjallError) -> String? {
         try get(key, in: keyspace).map { String(decoding: $0, as: UTF8.self) }
     }
 
     /// Returns `true` if the UTF-8 string key exists.
-    public func containsKey(_ key: String, in keyspace: OptimisticTxKeyspace) throws -> Bool {
+    public func containsKey(_ key: String, in keyspace: OptimisticTxKeyspace) throws(FjallError) -> Bool {
         try containsKey(Data(key.utf8), in: keyspace)
     }
 
     /// Stages an insert of a UTF-8 string key-value pair.
-    public func insert(_ key: String, _ value: String, into keyspace: OptimisticTxKeyspace) throws
+    public func insert(_ key: String, _ value: String, into keyspace: OptimisticTxKeyspace) throws(FjallError)
     {
         try insert(Data(key.utf8), Data(value.utf8), into: keyspace)
     }
 
     /// Stages an insert of a value for a UTF-8 string key.
-    public func insert(_ key: String, _ value: Data, into keyspace: OptimisticTxKeyspace) throws {
+    public func insert(_ key: String, _ value: Data, into keyspace: OptimisticTxKeyspace) throws(FjallError) {
         try insert(Data(key.utf8), value, into: keyspace)
     }
 
     /// Stages a removal of a UTF-8 string key.
-    public func remove(_ key: String, from keyspace: OptimisticTxKeyspace) throws {
+    public func remove(_ key: String, from keyspace: OptimisticTxKeyspace) throws(FjallError) {
         try remove(Data(key.utf8), from: keyspace)
     }
 
     /// Removes a UTF-8 string key and returns its value, if it existed.
-    public func take(_ key: String, from keyspace: OptimisticTxKeyspace) throws -> Data? {
+    public func take(_ key: String, from keyspace: OptimisticTxKeyspace) throws(FjallError) -> Data? {
         try take(Data(key.utf8), from: keyspace)
     }
 

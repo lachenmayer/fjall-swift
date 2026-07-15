@@ -61,62 +61,62 @@ public final class Keyspace: Sendable {
     // MARK: - Writing
 
     /// Inserts a key-value pair, overwriting any previous value.
-    public func insert(_ key: Data, _ value: Data) throws {
+    public func insert(_ key: Data, _ value: Data) throws(FjallError) {
         try fjallCall { try ffi.insert(key: key, value: value) }
     }
 
     /// Removes a key (leaves a tombstone).
-    public func remove(_ key: Data) throws {
+    public func remove(_ key: Data) throws(FjallError) {
         try fjallCall { try ffi.remove(key: key) }
     }
 
     /// Removes a key with a weak tombstone (experimental; see fjall docs).
-    public func removeWeak(_ key: Data) throws {
+    public func removeWeak(_ key: Data) throws(FjallError) {
         try fjallCall { try ffi.removeWeak(key: key) }
     }
 
     /// Removes all items from the keyspace in O(1).
-    public func clear() throws {
+    public func clear() throws(FjallError) {
         try fjallCall { try ffi.clear() }
     }
 
     // MARK: - Reading
 
     /// Retrieves the value for a key, or `nil` if it does not exist.
-    public func get(_ key: Data) throws -> Data? {
+    public func get(_ key: Data) throws(FjallError) -> Data? {
         try fjallCall { try ffi.get(key: key) }
     }
 
     /// Returns `true` if the key exists.
-    public func containsKey(_ key: Data) throws -> Bool {
+    public func containsKey(_ key: Data) throws(FjallError) -> Bool {
         try fjallCall { try ffi.containsKey(key: key) }
     }
 
     /// Size of the value for a key in bytes, without fetching it.
     /// Returns `nil` if the key does not exist.
-    public func size(of key: Data) throws -> Int? {
+    public func size(of key: Data) throws(FjallError) -> Int? {
         try fjallCall { try ffi.sizeOf(key: key) }.map(Int.init)
     }
 
     /// The first (minimum) key-value pair.
     public var first: KeyValuePair? {
-        get throws { try fjallCall { try ffi.firstKeyValue() }.map(KeyValuePair.init) }
+        get throws(FjallError) { try fjallCall { try ffi.firstKeyValue() }.map(KeyValuePair.init) }
     }
 
     /// The last (maximum) key-value pair.
     public var last: KeyValuePair? {
-        get throws { try fjallCall { try ffi.lastKeyValue() }.map(KeyValuePair.init) }
+        get throws(FjallError) { try fjallCall { try ffi.lastKeyValue() }.map(KeyValuePair.init) }
     }
 
     /// Exact number of items. This requires a full O(n) scan —
     /// prefer ``approximateCount`` where possible.
     public var count: Int {
-        get throws { Int(try fjallCall { try ffi.len() }) }
+        get throws(FjallError) { Int(try fjallCall { try ffi.len() }) }
     }
 
     /// Returns `true` if the keyspace contains no items (O(log n)).
     public var isEmpty: Bool {
-        get throws { try fjallCall { try ffi.isEmpty() } }
+        get throws(FjallError) { try fjallCall { try ffi.isEmpty() } }
     }
 
     /// Fast approximation of the number of items (O(1), may overcount).
@@ -156,7 +156,7 @@ public final class Keyspace: Sendable {
     // MARK: - Maintenance
 
     /// Runs a major compaction, merging everything into one run.
-    public func majorCompact() throws {
+    public func majorCompact() throws(FjallError) {
         try fjallCall { try ffi.majorCompact() }
     }
 }
@@ -169,37 +169,37 @@ extension Keyspace: KeyspaceRef {
 
 extension Keyspace {
     /// Inserts a UTF-8 string key-value pair, overwriting any previous value.
-    public func insert(_ key: String, _ value: String) throws {
+    public func insert(_ key: String, _ value: String) throws(FjallError) {
         try insert(Data(key.utf8), Data(value.utf8))
     }
 
     /// Inserts a value for a UTF-8 string key, overwriting any previous value.
-    public func insert(_ key: String, _ value: Data) throws {
+    public func insert(_ key: String, _ value: Data) throws(FjallError) {
         try insert(Data(key.utf8), value)
     }
 
     /// Retrieves the value for a UTF-8 string key.
-    public func get(_ key: String) throws -> Data? {
+    public func get(_ key: String) throws(FjallError) -> Data? {
         try get(Data(key.utf8))
     }
 
     /// Retrieves the value for a UTF-8 string key, decoded as a UTF-8 string.
-    public func getString(_ key: String) throws -> String? {
+    public func getString(_ key: String) throws(FjallError) -> String? {
         try get(key).map { String(decoding: $0, as: UTF8.self) }
     }
 
     /// Removes a UTF-8 string key.
-    public func remove(_ key: String) throws {
+    public func remove(_ key: String) throws(FjallError) {
         try remove(Data(key.utf8))
     }
 
     /// Returns `true` if the UTF-8 string key exists.
-    public func containsKey(_ key: String) throws -> Bool {
+    public func containsKey(_ key: String) throws(FjallError) -> Bool {
         try containsKey(Data(key.utf8))
     }
 
     /// Size of the value for a UTF-8 string key, in bytes.
-    public func size(of key: String) throws -> Int? {
+    public func size(of key: String) throws(FjallError) -> Int? {
         try size(of: Data(key.utf8))
     }
 

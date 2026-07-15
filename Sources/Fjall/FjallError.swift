@@ -68,10 +68,15 @@ public enum FjallError: Error, Sendable, Equatable, Hashable, CustomStringConver
 
 /// Runs an FFI call, rethrowing its error as a `FjallError`.
 @inline(__always)
-func fjallCall<T>(_ body: () throws -> T) throws -> T {
+func fjallCall<T>(_ body: () throws -> T) throws(FjallError) -> T {
     do {
         return try body()
     } catch let error as FfiError {
         throw FjallError(error)
+    } catch let error as FjallError {
+        throw error
+    } catch {
+        // The FFI layer only throws FfiError; this is a safety net.
+        throw FjallError.other(String(describing: error))
     }
 }

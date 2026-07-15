@@ -59,19 +59,19 @@ public final class Database: Sendable {
     let ffi: FfiDatabase
 
     /// Opens (or creates) a database at the given path.
-    public init(path: String, options: Options = Options()) throws {
+    public init(path: String, options: Options = Options()) throws(FjallError) {
         self.ffi = try fjallCall { try FfiDatabase.open(path: path, config: options.ffi) }
     }
 
     /// Opens (or creates) a database at the given file URL.
-    public convenience init(url: URL, options: Options = Options()) throws {
+    public convenience init(url: URL, options: Options = Options()) throws(FjallError) {
         try self.init(path: url.path, options: options)
     }
 
     /// Opens a keyspace, creating it (with the given options) if it does not exist.
     ///
     /// The options only take effect when the keyspace is first created.
-    public func keyspace(_ name: String, options: Keyspace.Options = .init()) throws -> Keyspace {
+    public func keyspace(_ name: String, options: Keyspace.Options = .init()) throws(FjallError) -> Keyspace {
         Keyspace(ffi: try fjallCall { try ffi.keyspace(name: name, options: options.ffi) })
     }
 
@@ -93,12 +93,12 @@ public final class Database: Sendable {
     /// Deletes a keyspace and all its data.
     ///
     /// Any further use of the keyspace handle throws ``FjallError/keyspaceDeleted``.
-    public func deleteKeyspace(_ keyspace: Keyspace) throws {
+    public func deleteKeyspace(_ keyspace: Keyspace) throws(FjallError) {
         try fjallCall { try ffi.deleteKeyspace(keyspace: keyspace.ffi) }
     }
 
     /// Persists the journal to disk with the given durability level.
-    public func persist(_ mode: PersistMode) throws {
+    public func persist(_ mode: PersistMode) throws(FjallError) {
         try fjallCall { try ffi.persist(mode: mode.ffi) }
     }
 
@@ -117,12 +117,12 @@ public final class Database: Sendable {
 
     /// Total disk space used by the database, in bytes.
     public var diskSpace: UInt64 {
-        get throws { try fjallCall { try ffi.diskSpace() } }
+        get throws(FjallError) { try fjallCall { try ffi.diskSpace() } }
     }
 
     /// Disk space used by the journal, in bytes.
     public var journalDiskSpace: UInt64 {
-        get throws { try fjallCall { try ffi.journalDiskSpace() } }
+        get throws(FjallError) { try fjallCall { try ffi.journalDiskSpace() } }
     }
 
     /// Number of journal files.
