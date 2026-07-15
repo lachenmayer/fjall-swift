@@ -1,0 +1,4 @@
+[bindings.swift]
+module_name = "FjallFFI"
+ffi_module_name = "CFjallFFI"
+generate_immutable_records = true

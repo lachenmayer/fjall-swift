@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Test
+        run: cargo test --manifest-path rust/Cargo.toml
+
+  bindings-fresh:
+    name: Generated bindings are up to date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Regenerate bindings
+        run: ./scripts/generate-bindings.sh
+      - name: Diff
+        run: git diff --exit-code Sources/FjallFFI Sources/CFjallFFI
+
+  swift-linux:
+    name: Swift tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build Rust static library
+        run: cargo build --manifest-path rust/Cargo.toml --release
+      - name: Swift tests
+        run: swift test -Xlinker -L"$PWD/rust/target/release"
+
+  swift-macos:
+    name: Swift tests (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Build XCFramework (native slice only)
+        run: ./scripts/build-xcframework.sh --native
+      - name: Swift tests
+        run: FJALL_USE_LOCAL_FRAMEWORK=1 swift test

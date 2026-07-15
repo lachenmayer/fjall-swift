@@ -1,0 +1,6 @@
+.build/
+.swiftpm/
+DerivedData/
+rust/target/
+.DS_Store
+.fjall_data/

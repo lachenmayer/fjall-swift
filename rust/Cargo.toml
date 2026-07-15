@@ -1,0 +1,29 @@
+[package]
+name = "fjall-ffi"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+name = "fjall_ffi"
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+fjall = "3.1.6"
+uniffi = { version = "0.32", features = ["cli"] }
+
+[build-dependencies]
+uniffi = { version = "0.32", features = ["build"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[dev-dependencies]
+tempfile = "3.27.0"

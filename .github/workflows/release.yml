@@ -1,0 +1,54 @@
+name: Release
+
+# Publishes a release: builds the full FjallFFI.xcframework, points
+# Package.swift at the uploaded artifact, commits, tags, and creates a
+# GitHub release with the framework attached.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.1.0 (tag will be v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build XCFramework (all Apple platforms)
+        run: ./scripts/build-xcframework.sh
+
+      - name: Update Package.swift
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="v$VERSION"
+          URL="https://github.com/${{ github.repository }}/releases/download/$TAG/FjallFFI.xcframework.zip"
+          CHECKSUM=$(swift package compute-checksum rust/target/xcframework/FjallFFI.xcframework.zip)
+          # Replace either the initial placeholders or a previous release's values.
+          sed -i '' -E "s|let releaseURL = \".*\"|let releaseURL = \"$URL\"|" Package.swift
+          sed -i '' -E "s|let releaseChecksum = \".*\"|let releaseChecksum = \"$CHECKSUM\"|" Package.swift
+          echo "Updated Package.swift -> $URL ($CHECKSUM)"
+
+      - name: Commit, tag, push
+        run: |
+          VERSION="${{ inputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Package.swift
+          git commit -m "Release v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD "v$VERSION"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version }}"
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --generate-notes \
+            rust/target/xcframework/FjallFFI.xcframework.zip

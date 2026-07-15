@@ -1,0 +1,5 @@
+module CFjallFFI {
+    header "CFjallFFI.h"
+    link "fjall_ffi"
+    export *
+}
