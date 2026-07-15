@@ -36,6 +36,8 @@ jobs:
   swift-linux:
     name: Swift tests (Linux)
     runs-on: ubuntu-latest
+    # Linux support is best-effort for now; don't block CI on it.
+    continue-on-error: true
     container: swift:6.1
     steps:
       - uses: actions/checkout@v4

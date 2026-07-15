@@ -1580,6 +1580,1514 @@ public func FfiConverterTypeFfiKeyspace_lower(_ value: FfiKeyspace) -> UInt64 {
 
 
 /**
+ * An optimistic write transaction, mirrors `fjall::OptimisticWriteTx`.
+ *
+ * Contains `None` after commit or rollback.
+ */
+public protocol FfiOptimisticTxProtocol: AnyObject, Sendable {
+    
+    /**
+     * Commits the transaction.
+     *
+     * Fails with a conflict error if another transaction modified the same
+     * keys since this transaction started. The transaction cannot be used
+     * afterwards.
+     */
+    func commit() throws 
+    
+    /**
+     * Returns true if the key exists.
+     */
+    func containsKey(keyspace: FfiOptimisticTxKeyspace, key: Data) throws  -> Bool
+    
+    /**
+     * The first (minimum) key-value pair visible to this transaction.
+     */
+    func firstKeyValue(keyspace: FfiOptimisticTxKeyspace) throws  -> FfiKvPair?
+    
+    /**
+     * Retrieves the value for a key, seeing the transaction's own writes.
+     */
+    func get(keyspace: FfiOptimisticTxKeyspace, key: Data) throws  -> Data?
+    
+    /**
+     * Stages an insert.
+     */
+    func insert(keyspace: FfiOptimisticTxKeyspace, key: Data, value: Data) throws 
+    
+    /**
+     * Returns true if the keyspace is empty as seen by this transaction.
+     */
+    func isEmpty(keyspace: FfiOptimisticTxKeyspace) throws  -> Bool
+    
+    /**
+     * Iterates over the keyspace, including the transaction's own writes.
+     */
+    func iter(keyspace: FfiOptimisticTxKeyspace) throws  -> FfiIterator
+    
+    /**
+     * The last (maximum) key-value pair visible to this transaction.
+     */
+    func lastKeyValue(keyspace: FfiOptimisticTxKeyspace) throws  -> FfiKvPair?
+    
+    /**
+     * Exact number of items visible to this transaction (full scan).
+     */
+    func len(keyspace: FfiOptimisticTxKeyspace) throws  -> UInt64
+    
+    /**
+     * Iterates over all keys with the given prefix, including the
+     * transaction's own writes.
+     */
+    func prefix(keyspace: FfiOptimisticTxKeyspace, prefix: Data) throws  -> FfiIterator
+    
+    /**
+     * Iterates over a key range, including the transaction's own writes.
+     */
+    func range(keyspace: FfiOptimisticTxKeyspace, lower: FfiBound?, upper: FfiBound?) throws  -> FfiIterator
+    
+    /**
+     * Stages a removal.
+     */
+    func remove(keyspace: FfiOptimisticTxKeyspace, key: Data) throws 
+    
+    /**
+     * Stages a weak removal (experimental; see fjall docs).
+     */
+    func removeWeak(keyspace: FfiOptimisticTxKeyspace, key: Data) throws 
+    
+    /**
+     * Rolls the transaction back, discarding all staged changes.
+     */
+    func rollback() throws 
+    
+    /**
+     * Sets the durability level used when the transaction commits.
+     */
+    func setDurability(mode: FfiPersistMode?) throws 
+    
+    /**
+     * Size of the value for a key in bytes.
+     */
+    func sizeOf(keyspace: FfiOptimisticTxKeyspace, key: Data) throws  -> UInt32?
+    
+    /**
+     * Removes an item and returns its value, if it existed.
+     */
+    func take(keyspace: FfiOptimisticTxKeyspace, key: Data) throws  -> Data?
+    
+}
+/**
+ * An optimistic write transaction, mirrors `fjall::OptimisticWriteTx`.
+ *
+ * Contains `None` after commit or rollback.
+ */
+open class FfiOptimisticTx: FfiOptimisticTxProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_fjall_ffi_fn_clone_ffioptimistictx(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_fjall_ffi_fn_free_ffioptimistictx(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Commits the transaction.
+     *
+     * Fails with a conflict error if another transaction modified the same
+     * keys since this transaction started. The transaction cannot be used
+     * afterwards.
+     */
+open func commit()throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_commit(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Returns true if the key exists.
+     */
+open func containsKey(keyspace: FfiOptimisticTxKeyspace, key: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_contains_key(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The first (minimum) key-value pair visible to this transaction.
+     */
+open func firstKeyValue(keyspace: FfiOptimisticTxKeyspace)throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_first_key_value(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Retrieves the value for a key, seeing the transaction's own writes.
+     */
+open func get(keyspace: FfiOptimisticTxKeyspace, key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_get(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Stages an insert.
+     */
+open func insert(keyspace: FfiOptimisticTxKeyspace, key: Data, value: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_insert(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),
+        FfiConverterData.lower(value),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Returns true if the keyspace is empty as seen by this transaction.
+     */
+open func isEmpty(keyspace: FfiOptimisticTxKeyspace)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_is_empty(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Iterates over the keyspace, including the transaction's own writes.
+     */
+open func iter(keyspace: FfiOptimisticTxKeyspace)throws  -> FfiIterator  {
+    return try  FfiConverterTypeFfiIterator_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_iter(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The last (maximum) key-value pair visible to this transaction.
+     */
+open func lastKeyValue(keyspace: FfiOptimisticTxKeyspace)throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_last_key_value(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Exact number of items visible to this transaction (full scan).
+     */
+open func len(keyspace: FfiOptimisticTxKeyspace)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_len(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Iterates over all keys with the given prefix, including the
+     * transaction's own writes.
+     */
+open func prefix(keyspace: FfiOptimisticTxKeyspace, prefix: Data)throws  -> FfiIterator  {
+    return try  FfiConverterTypeFfiIterator_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_prefix(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(prefix),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Iterates over a key range, including the transaction's own writes.
+     */
+open func range(keyspace: FfiOptimisticTxKeyspace, lower: FfiBound?, upper: FfiBound?)throws  -> FfiIterator  {
+    return try  FfiConverterTypeFfiIterator_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_range(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterOptionTypeFfiBound.lower(lower),
+        FfiConverterOptionTypeFfiBound.lower(upper),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Stages a removal.
+     */
+open func remove(keyspace: FfiOptimisticTxKeyspace, key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_remove(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Stages a weak removal (experimental; see fjall docs).
+     */
+open func removeWeak(keyspace: FfiOptimisticTxKeyspace, key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_remove_weak(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Rolls the transaction back, discarding all staged changes.
+     */
+open func rollback()throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_rollback(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Sets the durability level used when the transaction commits.
+     */
+open func setDurability(mode: FfiPersistMode?)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_set_durability(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionTypeFfiPersistMode.lower(mode),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Size of the value for a key in bytes.
+     */
+open func sizeOf(keyspace: FfiOptimisticTxKeyspace, key: Data)throws  -> UInt32?  {
+    return try  FfiConverterOptionUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_size_of(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Removes an item and returns its value, if it existed.
+     */
+open func take(keyspace: FfiOptimisticTxKeyspace, key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictx_take(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiOptimisticTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiOptimisticTx: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FfiOptimisticTx
+
+    public static func lift(_ handle: UInt64) throws -> FfiOptimisticTx {
+        return FfiOptimisticTx(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FfiOptimisticTx) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiOptimisticTx {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FfiOptimisticTx, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiOptimisticTx_lift(_ handle: UInt64) throws -> FfiOptimisticTx {
+    return try FfiConverterTypeFfiOptimisticTx.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiOptimisticTx_lower(_ value: FfiOptimisticTx) -> UInt64 {
+    return FfiConverterTypeFfiOptimisticTx.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Handle to an optimistic (SSI) transactional database,
+ * mirrors `fjall::OptimisticTxDatabase`.
+ */
+public protocol FfiOptimisticTxDatabaseProtocol: AnyObject, Sendable {
+    
+    /**
+     * Total disk space used by the database.
+     */
+    func diskSpace() throws  -> UInt64
+    
+    /**
+     * Number of journal files.
+     */
+    func journalCount()  -> UInt64
+    
+    /**
+     * Opens a transactional keyspace, creating it if it does not exist.
+     */
+    func keyspace(name: String, options: FfiKeyspaceOptions) throws  -> FfiOptimisticTxKeyspace
+    
+    /**
+     * Number of keyspaces in the database.
+     */
+    func keyspaceCount()  -> UInt64
+    
+    /**
+     * Returns true if a keyspace with this name exists.
+     */
+    func keyspaceExists(name: String)  -> Bool
+    
+    /**
+     * Names of all keyspaces in the database.
+     */
+    func listKeyspaceNames()  -> [String]
+    
+    /**
+     * Persists the journal to disk with the given durability level.
+     */
+    func persist(mode: FfiPersistMode) throws 
+    
+    /**
+     * Starts a read-only transaction (a snapshot).
+     */
+    func readTx()  -> FfiSnapshot
+    
+    /**
+     * Current size of all write buffers in bytes.
+     */
+    func writeBufferSize()  -> UInt64
+    
+    /**
+     * Starts a writeable transaction.
+     *
+     * Multiple write transactions can run concurrently; on commit, a
+     * transaction fails with a conflict error if another transaction
+     * modified the same keys.
+     */
+    func writeTx() throws  -> FfiOptimisticTx
+    
+}
+/**
+ * Handle to an optimistic (SSI) transactional database,
+ * mirrors `fjall::OptimisticTxDatabase`.
+ */
+open class FfiOptimisticTxDatabase: FfiOptimisticTxDatabaseProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_fjall_ffi_fn_clone_ffioptimistictxdatabase(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_fjall_ffi_fn_free_ffioptimistictxdatabase(handle, $0) }
+    }
+
+    
+    /**
+     * Opens (or creates) an optimistic transactional database at the given path.
+     */
+public static func `open`(path: String, config: FfiDatabaseConfig)throws  -> FfiOptimisticTxDatabase  {
+    return try  FfiConverterTypeFfiOptimisticTxDatabase_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_constructor_ffioptimistictxdatabase_open(
+        FfiConverterString.lower(path),
+        FfiConverterTypeFfiDatabaseConfig_lower(config),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+    /**
+     * Total disk space used by the database.
+     */
+open func diskSpace()throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_disk_space(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Number of journal files.
+     */
+open func journalCount() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_journal_count(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Opens a transactional keyspace, creating it if it does not exist.
+     */
+open func keyspace(name: String, options: FfiKeyspaceOptions)throws  -> FfiOptimisticTxKeyspace  {
+    return try  FfiConverterTypeFfiOptimisticTxKeyspace_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_keyspace(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),
+        FfiConverterTypeFfiKeyspaceOptions_lower(options),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Number of keyspaces in the database.
+     */
+open func keyspaceCount() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_keyspace_count(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Returns true if a keyspace with this name exists.
+     */
+open func keyspaceExists(name: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_keyspace_exists(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Names of all keyspaces in the database.
+     */
+open func listKeyspaceNames() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_list_keyspace_names(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Persists the journal to disk with the given durability level.
+     */
+open func persist(mode: FfiPersistMode)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_persist(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiPersistMode_lower(mode),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Starts a read-only transaction (a snapshot).
+     */
+open func readTx() -> FfiSnapshot  {
+    return try!  FfiConverterTypeFfiSnapshot_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_read_tx(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Current size of all write buffers in bytes.
+     */
+open func writeBufferSize() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_write_buffer_size(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Starts a writeable transaction.
+     *
+     * Multiple write transactions can run concurrently; on commit, a
+     * transaction fails with a conflict error if another transaction
+     * modified the same keys.
+     */
+open func writeTx()throws  -> FfiOptimisticTx  {
+    return try  FfiConverterTypeFfiOptimisticTx_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxdatabase_write_tx(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiOptimisticTxDatabase: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FfiOptimisticTxDatabase
+
+    public static func lift(_ handle: UInt64) throws -> FfiOptimisticTxDatabase {
+        return FfiOptimisticTxDatabase(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FfiOptimisticTxDatabase) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiOptimisticTxDatabase {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FfiOptimisticTxDatabase, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiOptimisticTxDatabase_lift(_ handle: UInt64) throws -> FfiOptimisticTxDatabase {
+    return try FfiConverterTypeFfiOptimisticTxDatabase.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiOptimisticTxDatabase_lower(_ value: FfiOptimisticTxDatabase) -> UInt64 {
+    return FfiConverterTypeFfiOptimisticTxDatabase.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Handle to a keyspace of an optimistic transactional database,
+ * mirrors `fjall::OptimisticTxKeyspace`.
+ */
+public protocol FfiOptimisticTxKeyspaceProtocol: AnyObject, Sendable {
+    
+    /**
+     * Fast approximation of the number of items (O(1), may overcount).
+     */
+    func approximateLen()  -> UInt64
+    
+    /**
+     * The underlying non-transactional keyspace handle
+     * (used for reads through snapshots).
+     */
+    func base()  -> FfiKeyspace
+    
+    /**
+     * Returns true if the key exists.
+     */
+    func containsKey(key: Data) throws  -> Bool
+    
+    /**
+     * The first (minimum) key-value pair.
+     */
+    func firstKeyValue() throws  -> FfiKvPair?
+    
+    /**
+     * Retrieves the value for a key.
+     */
+    func get(key: Data) throws  -> Data?
+    
+    /**
+     * Inserts a key-value pair (as its own transaction).
+     */
+    func insert(key: Data, value: Data) throws 
+    
+    /**
+     * The last (maximum) key-value pair.
+     */
+    func lastKeyValue() throws  -> FfiKvPair?
+    
+    /**
+     * Name of the keyspace.
+     */
+    func name()  -> String
+    
+    /**
+     * Filesystem path of the keyspace's data.
+     */
+    func path()  -> String
+    
+    /**
+     * Removes a key (as its own transaction).
+     */
+    func remove(key: Data) throws 
+    
+    /**
+     * Removes a key with a weak tombstone (experimental; see fjall docs).
+     */
+    func removeWeak(key: Data) throws 
+    
+    /**
+     * Size of the value for a key in bytes, without fetching it.
+     */
+    func sizeOf(key: Data) throws  -> UInt32?
+    
+    /**
+     * Atomically removes an item and returns its value, if it existed.
+     */
+    func take(key: Data) throws  -> Data?
+    
+}
+/**
+ * Handle to a keyspace of an optimistic transactional database,
+ * mirrors `fjall::OptimisticTxKeyspace`.
+ */
+open class FfiOptimisticTxKeyspace: FfiOptimisticTxKeyspaceProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_fjall_ffi_fn_clone_ffioptimistictxkeyspace(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_fjall_ffi_fn_free_ffioptimistictxkeyspace(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Fast approximation of the number of items (O(1), may overcount).
+     */
+open func approximateLen() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_approximate_len(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The underlying non-transactional keyspace handle
+     * (used for reads through snapshots).
+     */
+open func base() -> FfiKeyspace  {
+    return try!  FfiConverterTypeFfiKeyspace_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_base(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Returns true if the key exists.
+     */
+open func containsKey(key: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_contains_key(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The first (minimum) key-value pair.
+     */
+open func firstKeyValue()throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_first_key_value(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Retrieves the value for a key.
+     */
+open func get(key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_get(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Inserts a key-value pair (as its own transaction).
+     */
+open func insert(key: Data, value: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_insert(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),
+        FfiConverterData.lower(value),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * The last (maximum) key-value pair.
+     */
+open func lastKeyValue()throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_last_key_value(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Name of the keyspace.
+     */
+open func name() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_name(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Filesystem path of the keyspace's data.
+     */
+open func path() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_path(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Removes a key (as its own transaction).
+     */
+open func remove(key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_remove(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Removes a key with a weak tombstone (experimental; see fjall docs).
+     */
+open func removeWeak(key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_remove_weak(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Size of the value for a key in bytes, without fetching it.
+     */
+open func sizeOf(key: Data)throws  -> UInt32?  {
+    return try  FfiConverterOptionUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_size_of(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Atomically removes an item and returns its value, if it existed.
+     */
+open func take(key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffioptimistictxkeyspace_take(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiOptimisticTxKeyspace: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FfiOptimisticTxKeyspace
+
+    public static func lift(_ handle: UInt64) throws -> FfiOptimisticTxKeyspace {
+        return FfiOptimisticTxKeyspace(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FfiOptimisticTxKeyspace) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiOptimisticTxKeyspace {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FfiOptimisticTxKeyspace, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiOptimisticTxKeyspace_lift(_ handle: UInt64) throws -> FfiOptimisticTxKeyspace {
+    return try FfiConverterTypeFfiOptimisticTxKeyspace.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiOptimisticTxKeyspace_lower(_ value: FfiOptimisticTxKeyspace) -> UInt64 {
+    return FfiConverterTypeFfiOptimisticTxKeyspace.lower(value)
+}
+
+
+
+
+
+
+/**
+ * A single-writer write transaction, mirrors `fjall::SingleWriterWriteTx`.
+ */
+public protocol FfiSingleWriterTxProtocol: AnyObject, Sendable {
+    
+    /**
+     * Commits the transaction. The transaction cannot be used afterwards.
+     */
+    func commit() throws 
+    
+    /**
+     * Returns true if the key exists.
+     */
+    func containsKey(keyspace: FfiTxKeyspace, key: Data) throws  -> Bool
+    
+    /**
+     * The first (minimum) key-value pair visible to this transaction.
+     */
+    func firstKeyValue(keyspace: FfiTxKeyspace) throws  -> FfiKvPair?
+    
+    /**
+     * Retrieves the value for a key, seeing the transaction's own writes.
+     */
+    func get(keyspace: FfiTxKeyspace, key: Data) throws  -> Data?
+    
+    /**
+     * Stages an insert.
+     */
+    func insert(keyspace: FfiTxKeyspace, key: Data, value: Data) throws 
+    
+    /**
+     * Returns true if the keyspace is empty as seen by this transaction.
+     */
+    func isEmpty(keyspace: FfiTxKeyspace) throws  -> Bool
+    
+    /**
+     * Iterates over the keyspace, including the transaction's own writes.
+     */
+    func iter(keyspace: FfiTxKeyspace) throws  -> FfiIterator
+    
+    /**
+     * The last (maximum) key-value pair visible to this transaction.
+     */
+    func lastKeyValue(keyspace: FfiTxKeyspace) throws  -> FfiKvPair?
+    
+    /**
+     * Exact number of items visible to this transaction (full scan).
+     */
+    func len(keyspace: FfiTxKeyspace) throws  -> UInt64
+    
+    /**
+     * Iterates over all keys with the given prefix, including the
+     * transaction's own writes.
+     */
+    func prefix(keyspace: FfiTxKeyspace, prefix: Data) throws  -> FfiIterator
+    
+    /**
+     * Iterates over a key range, including the transaction's own writes.
+     */
+    func range(keyspace: FfiTxKeyspace, lower: FfiBound?, upper: FfiBound?) throws  -> FfiIterator
+    
+    /**
+     * Stages a removal.
+     */
+    func remove(keyspace: FfiTxKeyspace, key: Data) throws 
+    
+    /**
+     * Stages a weak removal (experimental; see fjall docs).
+     */
+    func removeWeak(keyspace: FfiTxKeyspace, key: Data) throws 
+    
+    /**
+     * Rolls the transaction back, discarding all staged changes.
+     */
+    func rollback() throws 
+    
+    /**
+     * Sets the durability level used when the transaction commits.
+     */
+    func setDurability(mode: FfiPersistMode?) throws 
+    
+    /**
+     * Size of the value for a key in bytes.
+     */
+    func sizeOf(keyspace: FfiTxKeyspace, key: Data) throws  -> UInt32?
+    
+    /**
+     * Removes an item and returns its value, if it existed.
+     */
+    func take(keyspace: FfiTxKeyspace, key: Data) throws  -> Data?
+    
+}
+/**
+ * A single-writer write transaction, mirrors `fjall::SingleWriterWriteTx`.
+ */
+open class FfiSingleWriterTx: FfiSingleWriterTxProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_fjall_ffi_fn_clone_ffisinglewritertx(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_fjall_ffi_fn_free_ffisinglewritertx(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Commits the transaction. The transaction cannot be used afterwards.
+     */
+open func commit()throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_commit(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Returns true if the key exists.
+     */
+open func containsKey(keyspace: FfiTxKeyspace, key: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_contains_key(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The first (minimum) key-value pair visible to this transaction.
+     */
+open func firstKeyValue(keyspace: FfiTxKeyspace)throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_first_key_value(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Retrieves the value for a key, seeing the transaction's own writes.
+     */
+open func get(keyspace: FfiTxKeyspace, key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_get(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Stages an insert.
+     */
+open func insert(keyspace: FfiTxKeyspace, key: Data, value: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_insert(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),
+        FfiConverterData.lower(value),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Returns true if the keyspace is empty as seen by this transaction.
+     */
+open func isEmpty(keyspace: FfiTxKeyspace)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_is_empty(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Iterates over the keyspace, including the transaction's own writes.
+     */
+open func iter(keyspace: FfiTxKeyspace)throws  -> FfiIterator  {
+    return try  FfiConverterTypeFfiIterator_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_iter(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The last (maximum) key-value pair visible to this transaction.
+     */
+open func lastKeyValue(keyspace: FfiTxKeyspace)throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_last_key_value(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Exact number of items visible to this transaction (full scan).
+     */
+open func len(keyspace: FfiTxKeyspace)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_len(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Iterates over all keys with the given prefix, including the
+     * transaction's own writes.
+     */
+open func prefix(keyspace: FfiTxKeyspace, prefix: Data)throws  -> FfiIterator  {
+    return try  FfiConverterTypeFfiIterator_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_prefix(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(prefix),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Iterates over a key range, including the transaction's own writes.
+     */
+open func range(keyspace: FfiTxKeyspace, lower: FfiBound?, upper: FfiBound?)throws  -> FfiIterator  {
+    return try  FfiConverterTypeFfiIterator_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_range(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterOptionTypeFfiBound.lower(lower),
+        FfiConverterOptionTypeFfiBound.lower(upper),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Stages a removal.
+     */
+open func remove(keyspace: FfiTxKeyspace, key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_remove(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Stages a weak removal (experimental; see fjall docs).
+     */
+open func removeWeak(keyspace: FfiTxKeyspace, key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_remove_weak(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Rolls the transaction back, discarding all staged changes.
+     */
+open func rollback()throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_rollback(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Sets the durability level used when the transaction commits.
+     */
+open func setDurability(mode: FfiPersistMode?)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_set_durability(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionTypeFfiPersistMode.lower(mode),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Size of the value for a key in bytes.
+     */
+open func sizeOf(keyspace: FfiTxKeyspace, key: Data)throws  -> UInt32?  {
+    return try  FfiConverterOptionUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_size_of(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Removes an item and returns its value, if it existed.
+     */
+open func take(keyspace: FfiTxKeyspace, key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffisinglewritertx_take(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiTxKeyspace_lower(keyspace),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiSingleWriterTx: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FfiSingleWriterTx
+
+    public static func lift(_ handle: UInt64) throws -> FfiSingleWriterTx {
+        return FfiSingleWriterTx(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FfiSingleWriterTx) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiSingleWriterTx {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FfiSingleWriterTx, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiSingleWriterTx_lift(_ handle: UInt64) throws -> FfiSingleWriterTx {
+    return try FfiConverterTypeFfiSingleWriterTx.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiSingleWriterTx_lower(_ value: FfiSingleWriterTx) -> UInt64 {
+    return FfiConverterTypeFfiSingleWriterTx.lower(value)
+}
+
+
+
+
+
+
+/**
  * A consistent, cross-keyspace point-in-time view, mirrors `fjall::Snapshot`.
  */
 public protocol FfiSnapshotProtocol: AnyObject, Sendable {
@@ -1870,6 +3378,658 @@ public func FfiConverterTypeFfiSnapshot_lift(_ handle: UInt64) throws -> FfiSnap
 #endif
 public func FfiConverterTypeFfiSnapshot_lower(_ value: FfiSnapshot) -> UInt64 {
     return FfiConverterTypeFfiSnapshot.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Handle to a single-writer transactional database,
+ * mirrors `fjall::SingleWriterTxDatabase`.
+ */
+public protocol FfiTxDatabaseProtocol: AnyObject, Sendable {
+    
+    /**
+     * Total disk space used by the database.
+     */
+    func diskSpace() throws  -> UInt64
+    
+    /**
+     * Number of journal files.
+     */
+    func journalCount()  -> UInt64
+    
+    /**
+     * Opens a transactional keyspace, creating it if it does not exist.
+     */
+    func keyspace(name: String, options: FfiKeyspaceOptions) throws  -> FfiTxKeyspace
+    
+    /**
+     * Number of keyspaces in the database.
+     */
+    func keyspaceCount()  -> UInt64
+    
+    /**
+     * Returns true if a keyspace with this name exists.
+     */
+    func keyspaceExists(name: String)  -> Bool
+    
+    /**
+     * Names of all keyspaces in the database.
+     */
+    func listKeyspaceNames()  -> [String]
+    
+    /**
+     * Persists the journal to disk with the given durability level.
+     */
+    func persist(mode: FfiPersistMode) throws 
+    
+    /**
+     * Starts a read-only transaction (a snapshot).
+     */
+    func readTx()  -> FfiSnapshot
+    
+    /**
+     * Current size of all write buffers in bytes.
+     */
+    func writeBufferSize()  -> UInt64
+    
+    /**
+     * Starts a writeable transaction.
+     *
+     * Blocks until any other active write transaction has finished.
+     */
+    func writeTx() throws  -> FfiSingleWriterTx
+    
+}
+/**
+ * Handle to a single-writer transactional database,
+ * mirrors `fjall::SingleWriterTxDatabase`.
+ */
+open class FfiTxDatabase: FfiTxDatabaseProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_fjall_ffi_fn_clone_ffitxdatabase(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_fjall_ffi_fn_free_ffitxdatabase(handle, $0) }
+    }
+
+    
+    /**
+     * Opens (or creates) a single-writer transactional database at the given path.
+     */
+public static func `open`(path: String, config: FfiDatabaseConfig)throws  -> FfiTxDatabase  {
+    return try  FfiConverterTypeFfiTxDatabase_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_constructor_ffitxdatabase_open(
+        FfiConverterString.lower(path),
+        FfiConverterTypeFfiDatabaseConfig_lower(config),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+    /**
+     * Total disk space used by the database.
+     */
+open func diskSpace()throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_disk_space(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Number of journal files.
+     */
+open func journalCount() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_journal_count(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Opens a transactional keyspace, creating it if it does not exist.
+     */
+open func keyspace(name: String, options: FfiKeyspaceOptions)throws  -> FfiTxKeyspace  {
+    return try  FfiConverterTypeFfiTxKeyspace_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_keyspace(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),
+        FfiConverterTypeFfiKeyspaceOptions_lower(options),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Number of keyspaces in the database.
+     */
+open func keyspaceCount() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_keyspace_count(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Returns true if a keyspace with this name exists.
+     */
+open func keyspaceExists(name: String) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_keyspace_exists(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Names of all keyspaces in the database.
+     */
+open func listKeyspaceNames() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_list_keyspace_names(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Persists the journal to disk with the given durability level.
+     */
+open func persist(mode: FfiPersistMode)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_persist(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiPersistMode_lower(mode),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Starts a read-only transaction (a snapshot).
+     */
+open func readTx() -> FfiSnapshot  {
+    return try!  FfiConverterTypeFfiSnapshot_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_read_tx(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Current size of all write buffers in bytes.
+     */
+open func writeBufferSize() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_write_buffer_size(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Starts a writeable transaction.
+     *
+     * Blocks until any other active write transaction has finished.
+     */
+open func writeTx()throws  -> FfiSingleWriterTx  {
+    return try  FfiConverterTypeFfiSingleWriterTx_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxdatabase_write_tx(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiTxDatabase: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FfiTxDatabase
+
+    public static func lift(_ handle: UInt64) throws -> FfiTxDatabase {
+        return FfiTxDatabase(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FfiTxDatabase) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiTxDatabase {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FfiTxDatabase, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiTxDatabase_lift(_ handle: UInt64) throws -> FfiTxDatabase {
+    return try FfiConverterTypeFfiTxDatabase.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiTxDatabase_lower(_ value: FfiTxDatabase) -> UInt64 {
+    return FfiConverterTypeFfiTxDatabase.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Handle to a keyspace of a single-writer transactional database,
+ * mirrors `fjall::SingleWriterTxKeyspace`.
+ *
+ * Write operations called directly on this type run as their own
+ * mini-transaction.
+ */
+public protocol FfiTxKeyspaceProtocol: AnyObject, Sendable {
+    
+    /**
+     * Fast approximation of the number of items (O(1), may overcount).
+     */
+    func approximateLen()  -> UInt64
+    
+    /**
+     * The underlying non-transactional keyspace handle
+     * (used for reads through snapshots).
+     */
+    func base()  -> FfiKeyspace
+    
+    /**
+     * Returns true if the key exists.
+     */
+    func containsKey(key: Data) throws  -> Bool
+    
+    /**
+     * The first (minimum) key-value pair.
+     */
+    func firstKeyValue() throws  -> FfiKvPair?
+    
+    /**
+     * Retrieves the value for a key.
+     */
+    func get(key: Data) throws  -> Data?
+    
+    /**
+     * Inserts a key-value pair (as its own transaction).
+     */
+    func insert(key: Data, value: Data) throws 
+    
+    /**
+     * The last (maximum) key-value pair.
+     */
+    func lastKeyValue() throws  -> FfiKvPair?
+    
+    /**
+     * Name of the keyspace.
+     */
+    func name()  -> String
+    
+    /**
+     * Filesystem path of the keyspace's data.
+     */
+    func path()  -> String
+    
+    /**
+     * Removes a key (as its own transaction).
+     */
+    func remove(key: Data) throws 
+    
+    /**
+     * Removes a key with a weak tombstone (experimental; see fjall docs).
+     */
+    func removeWeak(key: Data) throws 
+    
+    /**
+     * Size of the value for a key in bytes, without fetching it.
+     */
+    func sizeOf(key: Data) throws  -> UInt32?
+    
+    /**
+     * Atomically removes an item and returns its value, if it existed.
+     */
+    func take(key: Data) throws  -> Data?
+    
+}
+/**
+ * Handle to a keyspace of a single-writer transactional database,
+ * mirrors `fjall::SingleWriterTxKeyspace`.
+ *
+ * Write operations called directly on this type run as their own
+ * mini-transaction.
+ */
+open class FfiTxKeyspace: FfiTxKeyspaceProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_fjall_ffi_fn_clone_ffitxkeyspace(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_fjall_ffi_fn_free_ffitxkeyspace(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Fast approximation of the number of items (O(1), may overcount).
+     */
+open func approximateLen() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_approximate_len(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The underlying non-transactional keyspace handle
+     * (used for reads through snapshots).
+     */
+open func base() -> FfiKeyspace  {
+    return try!  FfiConverterTypeFfiKeyspace_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_base(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Returns true if the key exists.
+     */
+open func containsKey(key: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_contains_key(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * The first (minimum) key-value pair.
+     */
+open func firstKeyValue()throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_first_key_value(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Retrieves the value for a key.
+     */
+open func get(key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_get(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Inserts a key-value pair (as its own transaction).
+     */
+open func insert(key: Data, value: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_insert(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),
+        FfiConverterData.lower(value),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * The last (maximum) key-value pair.
+     */
+open func lastKeyValue()throws  -> FfiKvPair?  {
+    return try  FfiConverterOptionTypeFfiKvPair.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_last_key_value(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Name of the keyspace.
+     */
+open func name() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_name(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Filesystem path of the keyspace's data.
+     */
+open func path() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_path(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Removes a key (as its own transaction).
+     */
+open func remove(key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_remove(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Removes a key with a weak tombstone (experimental; see fjall docs).
+     */
+open func removeWeak(key: Data)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_remove_weak(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Size of the value for a key in bytes, without fetching it.
+     */
+open func sizeOf(key: Data)throws  -> UInt32?  {
+    return try  FfiConverterOptionUInt32.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_size_of(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Atomically removes an item and returns its value, if it existed.
+     */
+open func take(key: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_fjall_ffi_fn_method_ffitxkeyspace_take(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(key),uniffiCallStatus
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiTxKeyspace: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FfiTxKeyspace
+
+    public static func lift(_ handle: UInt64) throws -> FfiTxKeyspace {
+        return FfiTxKeyspace(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FfiTxKeyspace) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiTxKeyspace {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FfiTxKeyspace, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiTxKeyspace_lift(_ handle: UInt64) throws -> FfiTxKeyspace {
+    return try FfiConverterTypeFfiTxKeyspace.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiTxKeyspace_lower(_ value: FfiTxKeyspace) -> UInt64 {
+    return FfiConverterTypeFfiTxKeyspace.lower(value)
 }
 
 
@@ -2619,6 +4779,14 @@ enum FfiError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
      */
     case BatchConsumed
     /**
+     * The transaction was already committed or rolled back
+     */
+    case TransactionConsumed
+    /**
+     * The transaction conflicted with another transaction and was not applied
+     */
+    case Conflict
+    /**
      * Any other error
      */
     case Other(message: String
@@ -2672,7 +4840,9 @@ public struct FfiConverterTypeFfiError: FfiConverterRustBuffer {
         case 8: return .Locked
         case 9: return .Unrecoverable
         case 10: return .BatchConsumed
-        case 11: return .Other(
+        case 11: return .TransactionConsumed
+        case 12: return .Conflict
+        case 13: return .Other(
             message: try FfiConverterString.read(from: &buf)
             )
 
@@ -2732,8 +4902,16 @@ public struct FfiConverterTypeFfiError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(10))
         
         
-        case let .Other(message):
+        case .TransactionConsumed:
             writeInt(&buf, Int32(11))
+        
+        
+        case .Conflict:
+            writeInt(&buf, Int32(12))
+        
+        
+        case let .Other(message):
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(message, into: &buf)
             
         }
@@ -3232,6 +5410,177 @@ private let initializationResult: InitializationResult = {
     if (uniffi_fjall_ffi_checksum_method_ffikeyspace_size_of() != 45392) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_commit() != 10731) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_contains_key() != 2863) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_first_key_value() != 46287) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_get() != 61067) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_insert() != 29901) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_is_empty() != 8120) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_iter() != 33841) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_last_key_value() != 51870) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_len() != 32448) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_prefix() != 57639) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_range() != 17373) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_remove() != 4374) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_remove_weak() != 38524) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_rollback() != 8390) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_set_durability() != 32576) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_size_of() != 59920) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictx_take() != 64075) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_disk_space() != 47899) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_journal_count() != 56895) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_keyspace() != 38774) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_keyspace_count() != 10187) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_keyspace_exists() != 46182) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_list_keyspace_names() != 28350) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_persist() != 45817) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_read_tx() != 5355) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_write_buffer_size() != 15600) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxdatabase_write_tx() != 63810) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_approximate_len() != 1216) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_base() != 23640) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_contains_key() != 57856) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_first_key_value() != 39576) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_get() != 9196) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_insert() != 45229) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_last_key_value() != 49301) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_name() != 55461) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_path() != 11834) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_remove() != 3207) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_remove_weak() != 47789) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_size_of() != 45001) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffioptimistictxkeyspace_take() != 64956) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_commit() != 19013) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_contains_key() != 38648) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_first_key_value() != 42307) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_get() != 58637) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_insert() != 3276) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_is_empty() != 9581) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_iter() != 42011) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_last_key_value() != 62487) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_len() != 23501) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_prefix() != 60567) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_range() != 35651) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_remove() != 23781) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_remove_weak() != 7073) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_rollback() != 34720) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_set_durability() != 60734) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_size_of() != 59834) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffisinglewritertx_take() != 61247) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_fjall_ffi_checksum_method_ffisnapshot_contains_key() != 49252) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3262,6 +5611,75 @@ private let initializationResult: InitializationResult = {
     if (uniffi_fjall_ffi_checksum_method_ffisnapshot_size_of() != 490) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_disk_space() != 23073) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_journal_count() != 65294) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_keyspace() != 36648) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_keyspace_count() != 29502) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_keyspace_exists() != 30560) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_list_keyspace_names() != 12318) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_persist() != 31736) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_read_tx() != 55520) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_write_buffer_size() != 43525) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxdatabase_write_tx() != 8059) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_approximate_len() != 3397) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_base() != 61923) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_contains_key() != 12936) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_first_key_value() != 38637) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_get() != 33446) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_insert() != 30974) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_last_key_value() != 35887) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_name() != 44230) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_path() != 64916) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_remove() != 55336) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_remove_weak() != 18394) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_size_of() != 49664) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_method_ffitxkeyspace_take() != 4363) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_fjall_ffi_checksum_method_ffiwritebatch_commit() != 29737) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3284,6 +5702,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_fjall_ffi_checksum_constructor_ffidatabase_open() != 7522) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_constructor_ffioptimistictxdatabase_open() != 46037) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_fjall_ffi_checksum_constructor_ffitxdatabase_open() != 17048) {
         return InitializationResult.apiChecksumMismatch
     }
 

@@ -1,6 +1,15 @@
 import Foundation
 import FjallFFI
 
+/// Any handle that refers to a keyspace — plain (``Keyspace``) or
+/// transactional (``TxKeyspace``, ``OptimisticTxKeyspace``).
+///
+/// Lets snapshots read through any kind of keyspace handle.
+public protocol KeyspaceRef: Sendable {
+    /// The underlying plain keyspace handle.
+    var base: Keyspace { get }
+}
+
 /// A keyspace — a single LSM-tree inside a database, mirrors `fjall::Keyspace`.
 ///
 /// Comparable to a "column family" in RocksDB. Each keyspace is physically
@@ -150,6 +159,10 @@ public final class Keyspace: Sendable {
     public func majorCompact() throws {
         try fjallCall { try ffi.majorCompact() }
     }
+}
+
+extension Keyspace: KeyspaceRef {
+    public var base: Keyspace { self }
 }
 
 // MARK: - String conveniences

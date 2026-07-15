@@ -22,6 +22,10 @@ public enum FjallError: Error, Sendable, Equatable, Hashable, CustomStringConver
     case unrecoverable
     /// The write batch was already committed and cannot be used again.
     case batchConsumed
+    /// The transaction was already committed or rolled back.
+    case transactionConsumed
+    /// The transaction conflicted with another transaction and was not applied.
+    case conflict
     /// Any other error.
     case other(String)
 
@@ -37,6 +41,8 @@ public enum FjallError: Error, Sendable, Equatable, Hashable, CustomStringConver
         case .Locked: self = .locked
         case .Unrecoverable: self = .unrecoverable
         case .BatchConsumed: self = .batchConsumed
+        case .TransactionConsumed: self = .transactionConsumed
+        case .Conflict: self = .conflict
         case .Other(let message): self = .other(message)
         }
     }
@@ -53,6 +59,8 @@ public enum FjallError: Error, Sendable, Equatable, Hashable, CustomStringConver
         case .locked: "database is locked by another process"
         case .unrecoverable: "database is unrecoverable"
         case .batchConsumed: "write batch was already committed"
+        case .transactionConsumed: "transaction was already committed or rolled back"
+        case .conflict: "transaction conflicted with another transaction"
         case .other(let message): message
         }
     }

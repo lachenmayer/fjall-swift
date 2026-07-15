@@ -12,6 +12,7 @@ keys and values, `Sendable` handles, and Swift naming conventions.
 - Embedded key-value storage — a database is just a directory, no server
 - Multiple keyspaces (like RocksDB column families), each an isolated LSM-tree
 - Atomic cross-keyspace write batches
+- Transactions: single-writer (serialized) and optimistic (SSI with conflict detection)
 - Consistent point-in-time snapshots (MVCC)
 - Range & prefix iteration, forwards and backwards
 - LZ4 compression, optional key-value separation for large values
@@ -76,6 +77,44 @@ try snapshot.containsKey("later", in: items)  // false
 
 // Control durability explicitly.
 try db.persist(.syncAll)
+```
+
+### Transactions
+
+For cross-keyspace transactions with read-your-own-writes semantics, open the database
+as a `TxDatabase` (single-writer: write transactions are serialized) or an
+`OptimisticTxDatabase` (optimistic concurrency: transactions run in parallel and commits
+fail with `FjallError.conflict` when they collide):
+
+```swift
+let db = try TxDatabase(path: ".fjall_data")
+let items = try db.keyspace("items")
+
+// Scoped: commits on return, rolls back on throw.
+try db.write { tx in
+    let value = try tx.getString("counter", in: items) ?? "0"
+    try tx.insert("counter", String(Int(value)! + 1), into: items)
+}
+
+// Or explicit:
+let tx = try db.writeTransaction()
+try tx.insert("a", "1", into: items)
+try tx.commit()  // or tx.rollback()
+
+// Read-only transactions are snapshots.
+let read = db.readTransaction()
+```
+
+With `OptimisticTxDatabase`, conflicting transactions can be retried automatically:
+
+```swift
+let db = try OptimisticTxDatabase(path: ".fjall_data")
+let items = try db.keyspace("items")
+
+try db.write(attempts: 5) { tx in
+    let value = try tx.getString("counter", in: items) ?? "0"
+    try tx.insert("counter", String(Int(value)! + 1), into: items)
+}
 ```
 
 ### Configuration
@@ -156,9 +195,10 @@ checksum, tags the version, and attaches the framework to the GitHub release.
 
 ## Not (yet) wrapped
 
-- Transactions (`SingleWriterTxDatabase`, `OptimisticTxDatabase`) — planned
 - Bulk ingestion (`start_ingestion`)
 - Compaction strategy / block policy configuration
+- Closure-based atomic updates (`fetch_update` / `update_fetch`) — use a
+  transaction instead
 
 ## License
 

@@ -35,6 +35,10 @@ pub enum FfiError {
     Unrecoverable,
     /// The write batch was already committed and cannot be used again
     BatchConsumed,
+    /// The transaction was already committed or rolled back
+    TransactionConsumed,
+    /// The transaction conflicted with another transaction and was not applied
+    Conflict,
     /// Any other error
     Other { message: String },
 }
@@ -52,6 +56,10 @@ impl std::fmt::Display for FfiError {
             Self::Locked => write!(f, "database is locked by another process"),
             Self::Unrecoverable => write!(f, "database is unrecoverable"),
             Self::BatchConsumed => write!(f, "write batch was already committed"),
+            Self::TransactionConsumed => {
+                write!(f, "transaction was already committed or rolled back")
+            }
+            Self::Conflict => write!(f, "transaction conflicted with another transaction"),
             Self::Other { message } => write!(f, "{message}"),
         }
     }
@@ -249,18 +257,12 @@ fn build_create_options(options: FfiKeyspaceOptions) -> fjall::KeyspaceCreateOpt
 // Database
 // ---------------------------------------------------------------------------
 
-/// Handle to a fjall database, mirrors `fjall::Database`.
-#[derive(uniffi::Object)]
-pub struct FfiDatabase {
-    inner: fjall::Database,
-}
-
-#[uniffi::export]
-impl FfiDatabase {
-    /// Opens (or creates) a database at the given path.
-    #[uniffi::constructor]
-    pub fn open(path: String, config: FfiDatabaseConfig) -> FfiResult<Arc<Self>> {
-        let mut builder = fjall::Database::builder(&path);
+// Applies an `FfiDatabaseConfig` to any `DatabaseBuilder<O>`. A macro because
+// the `Openable` bound on the builder's type parameter is not public.
+macro_rules! configure_builder {
+    ($builder:expr, $config:expr) => {{
+        let mut builder = $builder;
+        let config = $config;
         if let Some(bytes) = config.cache_size_bytes {
             builder = builder.cache_size(bytes);
         }
@@ -279,6 +281,22 @@ impl FfiDatabase {
         if let Some(n) = config.worker_threads {
             builder = builder.worker_threads(n as usize);
         }
+        builder
+    }};
+}
+
+/// Handle to a fjall database, mirrors `fjall::Database`.
+#[derive(uniffi::Object)]
+pub struct FfiDatabase {
+    inner: fjall::Database,
+}
+
+#[uniffi::export]
+impl FfiDatabase {
+    /// Opens (or creates) a database at the given path.
+    #[uniffi::constructor]
+    pub fn open(path: String, config: FfiDatabaseConfig) -> FfiResult<Arc<Self>> {
+        let builder = configure_builder!(fjall::Database::builder(&path), config);
         Ok(Arc::new(Self {
             inner: builder.open()?,
         }))
@@ -726,6 +744,844 @@ impl FfiWriteBatch {
 }
 
 // ---------------------------------------------------------------------------
+// Single-writer transactions
+// ---------------------------------------------------------------------------
+
+/// Handle to a single-writer transactional database,
+/// mirrors `fjall::SingleWriterTxDatabase`.
+#[derive(uniffi::Object)]
+pub struct FfiTxDatabase {
+    inner: fjall::SingleWriterTxDatabase,
+}
+
+#[uniffi::export]
+impl FfiTxDatabase {
+    /// Opens (or creates) a single-writer transactional database at the given path.
+    #[uniffi::constructor]
+    pub fn open(path: String, config: FfiDatabaseConfig) -> FfiResult<Arc<Self>> {
+        let builder = configure_builder!(fjall::SingleWriterTxDatabase::builder(&path), config);
+        Ok(Arc::new(Self {
+            inner: builder.open()?,
+        }))
+    }
+
+    /// Opens a transactional keyspace, creating it if it does not exist.
+    pub fn keyspace(
+        &self,
+        name: String,
+        options: FfiKeyspaceOptions,
+    ) -> FfiResult<Arc<FfiTxKeyspace>> {
+        let keyspace = self
+            .inner
+            .keyspace(&name, move || build_create_options(options))?;
+        Ok(Arc::new(FfiTxKeyspace { inner: keyspace }))
+    }
+
+    /// Returns true if a keyspace with this name exists.
+    pub fn keyspace_exists(&self, name: String) -> bool {
+        self.inner.keyspace_exists(&name)
+    }
+
+    /// Number of keyspaces in the database.
+    pub fn keyspace_count(&self) -> u64 {
+        self.inner.keyspace_count() as u64
+    }
+
+    /// Names of all keyspaces in the database.
+    pub fn list_keyspace_names(&self) -> Vec<String> {
+        self.inner
+            .list_keyspace_names()
+            .into_iter()
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    /// Starts a read-only transaction (a snapshot).
+    pub fn read_tx(&self) -> Arc<FfiSnapshot> {
+        Arc::new(FfiSnapshot {
+            inner: self.inner.read_tx(),
+        })
+    }
+
+    /// Starts a writeable transaction.
+    ///
+    /// Blocks until any other active write transaction has finished.
+    pub fn write_tx(&self) -> FfiResult<Arc<FfiSingleWriterTx>> {
+        FfiSingleWriterTx::start(self.inner.clone())
+    }
+
+    /// Persists the journal to disk with the given durability level.
+    pub fn persist(&self, mode: FfiPersistMode) -> FfiResult<()> {
+        self.inner.persist(mode.into())?;
+        Ok(())
+    }
+
+    /// Total disk space used by the database.
+    pub fn disk_space(&self) -> FfiResult<u64> {
+        Ok(self.inner.disk_space()?)
+    }
+
+    /// Number of journal files.
+    pub fn journal_count(&self) -> u64 {
+        self.inner.journal_count() as u64
+    }
+
+    /// Current size of all write buffers in bytes.
+    pub fn write_buffer_size(&self) -> u64 {
+        self.inner.write_buffer_size()
+    }
+}
+
+/// Handle to a keyspace of a single-writer transactional database,
+/// mirrors `fjall::SingleWriterTxKeyspace`.
+///
+/// Write operations called directly on this type run as their own
+/// mini-transaction.
+#[derive(uniffi::Object)]
+pub struct FfiTxKeyspace {
+    inner: fjall::SingleWriterTxKeyspace,
+}
+
+#[uniffi::export]
+impl FfiTxKeyspace {
+    /// Name of the keyspace.
+    pub fn name(&self) -> String {
+        self.inner.inner().name().to_string()
+    }
+
+    /// Filesystem path of the keyspace's data.
+    pub fn path(&self) -> String {
+        self.inner.path().display().to_string()
+    }
+
+    /// The underlying non-transactional keyspace handle
+    /// (used for reads through snapshots).
+    pub fn base(&self) -> Arc<FfiKeyspace> {
+        Arc::new(FfiKeyspace {
+            inner: self.inner.inner().clone(),
+        })
+    }
+
+    /// Inserts a key-value pair (as its own transaction).
+    pub fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> FfiResult<()> {
+        self.inner.insert(key, value)?;
+        Ok(())
+    }
+
+    /// Retrieves the value for a key.
+    pub fn get(&self, key: Vec<u8>) -> FfiResult<Option<Vec<u8>>> {
+        Ok(self.inner.get(key)?.map(|value| value.to_vec()))
+    }
+
+    /// Removes a key (as its own transaction).
+    pub fn remove(&self, key: Vec<u8>) -> FfiResult<()> {
+        self.inner.remove(key)?;
+        Ok(())
+    }
+
+    /// Removes a key with a weak tombstone (experimental; see fjall docs).
+    pub fn remove_weak(&self, key: Vec<u8>) -> FfiResult<()> {
+        self.inner.remove_weak(key)?;
+        Ok(())
+    }
+
+    /// Atomically removes an item and returns its value, if it existed.
+    pub fn take(&self, key: Vec<u8>) -> FfiResult<Option<Vec<u8>>> {
+        Ok(self.inner.take(key)?.map(|value| value.to_vec()))
+    }
+
+    /// Returns true if the key exists.
+    pub fn contains_key(&self, key: Vec<u8>) -> FfiResult<bool> {
+        Ok(self.inner.contains_key(key)?)
+    }
+
+    /// Size of the value for a key in bytes, without fetching it.
+    pub fn size_of(&self, key: Vec<u8>) -> FfiResult<Option<u32>> {
+        Ok(self.inner.size_of(key)?)
+    }
+
+    /// The first (minimum) key-value pair.
+    pub fn first_key_value(&self) -> FfiResult<Option<FfiKvPair>> {
+        guard_to_pair(self.inner.first_key_value())
+    }
+
+    /// The last (maximum) key-value pair.
+    pub fn last_key_value(&self) -> FfiResult<Option<FfiKvPair>> {
+        guard_to_pair(self.inner.last_key_value())
+    }
+
+    /// Fast approximation of the number of items (O(1), may overcount).
+    pub fn approximate_len(&self) -> u64 {
+        self.inner.approximate_len() as u64
+    }
+}
+
+/// Commands processed by the transaction worker thread.
+///
+/// fjall's single-writer `WriteTransaction` holds a `MutexGuard`, so it is
+/// neither `Send` nor `'static` and cannot cross the FFI boundary. Instead,
+/// the transaction lives on a dedicated worker thread and operations are
+/// shipped to it as closures.
+enum SwTxCmd {
+    Op(Box<dyn for<'a> FnOnce(&mut Option<fjall::SingleWriterWriteTx<'a>>) + Send>),
+    Commit(std::sync::mpsc::Sender<FfiResult<()>>),
+    Rollback(std::sync::mpsc::Sender<()>),
+}
+
+fn tx_worker_died() -> FfiError {
+    FfiError::Other {
+        message: "transaction worker thread terminated unexpectedly".into(),
+    }
+}
+
+/// A single-writer write transaction, mirrors `fjall::SingleWriterWriteTx`.
+#[derive(uniffi::Object)]
+pub struct FfiSingleWriterTx {
+    sender: Mutex<Option<std::sync::mpsc::Sender<SwTxCmd>>>,
+}
+
+impl FfiSingleWriterTx {
+    fn start(db: fjall::SingleWriterTxDatabase) -> FfiResult<Arc<Self>> {
+        let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<SwTxCmd>();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel::<()>();
+
+        std::thread::Builder::new()
+            .name("fjall-write-tx".into())
+            .spawn(move || {
+                let mut tx = Some(db.write_tx());
+                let _ = ready_tx.send(());
+                while let Ok(cmd) = cmd_rx.recv() {
+                    match cmd {
+                        SwTxCmd::Op(op) => op(&mut tx),
+                        SwTxCmd::Commit(reply) => {
+                            let result = match tx.take() {
+                                Some(tx) => tx.commit().map_err(FfiError::from),
+                                None => Err(FfiError::TransactionConsumed),
+                            };
+                            let _ = reply.send(result);
+                            return;
+                        }
+                        SwTxCmd::Rollback(reply) => {
+                            if let Some(tx) = tx.take() {
+                                tx.rollback();
+                            }
+                            let _ = reply.send(());
+                            return;
+                        }
+                    }
+                }
+                // Handle dropped without commit/rollback: dropping the
+                // transaction rolls it back.
+            })
+            .map_err(|e| FfiError::Other {
+                message: format!("failed to spawn transaction thread: {e}"),
+            })?;
+
+        // Wait until the transaction actually holds the write lock, so that
+        // `write_tx()` has the same blocking semantics as in Rust.
+        ready_rx.recv().map_err(|_| tx_worker_died())?;
+
+        Ok(Arc::new(Self {
+            sender: Mutex::new(Some(cmd_tx)),
+        }))
+    }
+
+    /// Ships a closure to the worker thread and waits for its result.
+    fn exec<R: Send + 'static>(
+        &self,
+        op: impl for<'a> FnOnce(&mut Option<fjall::SingleWriterWriteTx<'a>>) -> FfiResult<R>
+            + Send
+            + 'static,
+    ) -> FfiResult<R> {
+        let (reply_tx, reply_rx) = std::sync::mpsc::channel::<FfiResult<R>>();
+        {
+            let guard = self.sender.lock().map_err(|_| FfiError::Poisoned)?;
+            let sender = guard.as_ref().ok_or(FfiError::TransactionConsumed)?;
+            sender
+                .send(SwTxCmd::Op(Box::new(move |tx| {
+                    let _ = reply_tx.send(op(tx));
+                })))
+                .map_err(|_| tx_worker_died())?;
+        }
+        reply_rx.recv().map_err(|_| tx_worker_died())?
+    }
+
+    /// Like `exec`, but for operations on a live transaction.
+    fn with_tx<R: Send + 'static>(
+        &self,
+        op: impl for<'a> FnOnce(&mut fjall::SingleWriterWriteTx<'a>) -> FfiResult<R> + Send + 'static,
+    ) -> FfiResult<R> {
+        self.exec(move |tx| match tx.as_mut() {
+            None => Err(FfiError::TransactionConsumed),
+            Some(tx) => op(tx),
+        })
+    }
+}
+
+#[uniffi::export]
+impl FfiSingleWriterTx {
+    /// Retrieves the value for a key, seeing the transaction's own writes.
+    pub fn get(&self, keyspace: Arc<FfiTxKeyspace>, key: Vec<u8>) -> FfiResult<Option<Vec<u8>>> {
+        self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.get(&keyspace.inner, key)?.map(|value| value.to_vec()))
+        })
+    }
+
+    /// Returns true if the key exists.
+    pub fn contains_key(&self, keyspace: Arc<FfiTxKeyspace>, key: Vec<u8>) -> FfiResult<bool> {
+        self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.contains_key(&keyspace.inner, key)?)
+        })
+    }
+
+    /// Size of the value for a key in bytes.
+    pub fn size_of(&self, keyspace: Arc<FfiTxKeyspace>, key: Vec<u8>) -> FfiResult<Option<u32>> {
+        self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.size_of(&keyspace.inner, key)?)
+        })
+    }
+
+    /// Exact number of items visible to this transaction (full scan).
+    pub fn len(&self, keyspace: Arc<FfiTxKeyspace>) -> FfiResult<u64> {
+        self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.len(&keyspace.inner)? as u64)
+        })
+    }
+
+    /// Returns true if the keyspace is empty as seen by this transaction.
+    pub fn is_empty(&self, keyspace: Arc<FfiTxKeyspace>) -> FfiResult<bool> {
+        self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.is_empty(&keyspace.inner)?)
+        })
+    }
+
+    /// The first (minimum) key-value pair visible to this transaction.
+    pub fn first_key_value(&self, keyspace: Arc<FfiTxKeyspace>) -> FfiResult<Option<FfiKvPair>> {
+        self.with_tx(move |tx| {
+            use fjall::Readable;
+            guard_to_pair(tx.first_key_value(&keyspace.inner))
+        })
+    }
+
+    /// The last (maximum) key-value pair visible to this transaction.
+    pub fn last_key_value(&self, keyspace: Arc<FfiTxKeyspace>) -> FfiResult<Option<FfiKvPair>> {
+        self.with_tx(move |tx| {
+            use fjall::Readable;
+            guard_to_pair(tx.last_key_value(&keyspace.inner))
+        })
+    }
+
+    /// Iterates over the keyspace, including the transaction's own writes.
+    pub fn iter(&self, keyspace: Arc<FfiTxKeyspace>) -> FfiResult<Arc<FfiIterator>> {
+        let iter = self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.iter(&keyspace.inner))
+        })?;
+        Ok(FfiIterator::new(iter))
+    }
+
+    /// Iterates over a key range, including the transaction's own writes.
+    pub fn range(
+        &self,
+        keyspace: Arc<FfiTxKeyspace>,
+        lower: Option<FfiBound>,
+        upper: Option<FfiBound>,
+    ) -> FfiResult<Arc<FfiIterator>> {
+        let iter = self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.range::<Vec<u8>, _>(&keyspace.inner, (to_bound(lower), to_bound(upper))))
+        })?;
+        Ok(FfiIterator::new(iter))
+    }
+
+    /// Iterates over all keys with the given prefix, including the
+    /// transaction's own writes.
+    pub fn prefix(
+        &self,
+        keyspace: Arc<FfiTxKeyspace>,
+        prefix: Vec<u8>,
+    ) -> FfiResult<Arc<FfiIterator>> {
+        let iter = self.with_tx(move |tx| {
+            use fjall::Readable;
+            Ok(tx.prefix(&keyspace.inner, prefix))
+        })?;
+        Ok(FfiIterator::new(iter))
+    }
+
+    /// Stages an insert.
+    pub fn insert(
+        &self,
+        keyspace: Arc<FfiTxKeyspace>,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> FfiResult<()> {
+        self.with_tx(move |tx| {
+            tx.insert(&keyspace.inner, key, value);
+            Ok(())
+        })
+    }
+
+    /// Stages a removal.
+    pub fn remove(&self, keyspace: Arc<FfiTxKeyspace>, key: Vec<u8>) -> FfiResult<()> {
+        self.with_tx(move |tx| {
+            tx.remove(&keyspace.inner, key);
+            Ok(())
+        })
+    }
+
+    /// Stages a weak removal (experimental; see fjall docs).
+    pub fn remove_weak(&self, keyspace: Arc<FfiTxKeyspace>, key: Vec<u8>) -> FfiResult<()> {
+        self.with_tx(move |tx| {
+            tx.remove_weak(&keyspace.inner, key);
+            Ok(())
+        })
+    }
+
+    /// Removes an item and returns its value, if it existed.
+    pub fn take(&self, keyspace: Arc<FfiTxKeyspace>, key: Vec<u8>) -> FfiResult<Option<Vec<u8>>> {
+        self.with_tx(move |tx| {
+            Ok(tx
+                .take(&keyspace.inner, key)?
+                .map(|value| value.to_vec()))
+        })
+    }
+
+    /// Sets the durability level used when the transaction commits.
+    pub fn set_durability(&self, mode: Option<FfiPersistMode>) -> FfiResult<()> {
+        self.exec(move |tx| match tx.take() {
+            None => Err(FfiError::TransactionConsumed),
+            Some(inner) => {
+                *tx = Some(inner.durability(mode.map(Into::into)));
+                Ok(())
+            }
+        })
+    }
+
+    /// Commits the transaction. The transaction cannot be used afterwards.
+    pub fn commit(&self) -> FfiResult<()> {
+        let sender = {
+            let mut guard = self.sender.lock().map_err(|_| FfiError::Poisoned)?;
+            guard.take().ok_or(FfiError::TransactionConsumed)?
+        };
+        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+        sender
+            .send(SwTxCmd::Commit(reply_tx))
+            .map_err(|_| tx_worker_died())?;
+        reply_rx.recv().map_err(|_| tx_worker_died())?
+    }
+
+    /// Rolls the transaction back, discarding all staged changes.
+    pub fn rollback(&self) -> FfiResult<()> {
+        let sender = {
+            let mut guard = self.sender.lock().map_err(|_| FfiError::Poisoned)?;
+            guard.take().ok_or(FfiError::TransactionConsumed)?
+        };
+        let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+        sender
+            .send(SwTxCmd::Rollback(reply_tx))
+            .map_err(|_| tx_worker_died())?;
+        reply_rx.recv().map_err(|_| tx_worker_died())?;
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Optimistic transactions
+// ---------------------------------------------------------------------------
+
+/// Handle to an optimistic (SSI) transactional database,
+/// mirrors `fjall::OptimisticTxDatabase`.
+#[derive(uniffi::Object)]
+pub struct FfiOptimisticTxDatabase {
+    inner: fjall::OptimisticTxDatabase,
+}
+
+#[uniffi::export]
+impl FfiOptimisticTxDatabase {
+    /// Opens (or creates) an optimistic transactional database at the given path.
+    #[uniffi::constructor]
+    pub fn open(path: String, config: FfiDatabaseConfig) -> FfiResult<Arc<Self>> {
+        let builder = configure_builder!(fjall::OptimisticTxDatabase::builder(&path), config);
+        Ok(Arc::new(Self {
+            inner: builder.open()?,
+        }))
+    }
+
+    /// Opens a transactional keyspace, creating it if it does not exist.
+    pub fn keyspace(
+        &self,
+        name: String,
+        options: FfiKeyspaceOptions,
+    ) -> FfiResult<Arc<FfiOptimisticTxKeyspace>> {
+        let keyspace = self
+            .inner
+            .keyspace(&name, move || build_create_options(options))?;
+        Ok(Arc::new(FfiOptimisticTxKeyspace { inner: keyspace }))
+    }
+
+    /// Returns true if a keyspace with this name exists.
+    pub fn keyspace_exists(&self, name: String) -> bool {
+        self.inner.keyspace_exists(&name)
+    }
+
+    /// Number of keyspaces in the database.
+    pub fn keyspace_count(&self) -> u64 {
+        self.inner.keyspace_count() as u64
+    }
+
+    /// Names of all keyspaces in the database.
+    pub fn list_keyspace_names(&self) -> Vec<String> {
+        self.inner
+            .list_keyspace_names()
+            .into_iter()
+            .map(|name| name.to_string())
+            .collect()
+    }
+
+    /// Starts a read-only transaction (a snapshot).
+    pub fn read_tx(&self) -> Arc<FfiSnapshot> {
+        Arc::new(FfiSnapshot {
+            inner: self.inner.read_tx(),
+        })
+    }
+
+    /// Starts a writeable transaction.
+    ///
+    /// Multiple write transactions can run concurrently; on commit, a
+    /// transaction fails with a conflict error if another transaction
+    /// modified the same keys.
+    pub fn write_tx(&self) -> FfiResult<Arc<FfiOptimisticTx>> {
+        Ok(Arc::new(FfiOptimisticTx {
+            inner: Mutex::new(Some(self.inner.write_tx()?)),
+        }))
+    }
+
+    /// Persists the journal to disk with the given durability level.
+    pub fn persist(&self, mode: FfiPersistMode) -> FfiResult<()> {
+        self.inner.persist(mode.into())?;
+        Ok(())
+    }
+
+    /// Total disk space used by the database.
+    pub fn disk_space(&self) -> FfiResult<u64> {
+        Ok(self.inner.disk_space()?)
+    }
+
+    /// Number of journal files.
+    pub fn journal_count(&self) -> u64 {
+        self.inner.journal_count() as u64
+    }
+
+    /// Current size of all write buffers in bytes.
+    pub fn write_buffer_size(&self) -> u64 {
+        self.inner.write_buffer_size()
+    }
+}
+
+/// Handle to a keyspace of an optimistic transactional database,
+/// mirrors `fjall::OptimisticTxKeyspace`.
+#[derive(uniffi::Object)]
+pub struct FfiOptimisticTxKeyspace {
+    inner: fjall::OptimisticTxKeyspace,
+}
+
+#[uniffi::export]
+impl FfiOptimisticTxKeyspace {
+    /// Name of the keyspace.
+    pub fn name(&self) -> String {
+        self.inner.inner().name().to_string()
+    }
+
+    /// Filesystem path of the keyspace's data.
+    pub fn path(&self) -> String {
+        self.inner.path().display().to_string()
+    }
+
+    /// The underlying non-transactional keyspace handle
+    /// (used for reads through snapshots).
+    pub fn base(&self) -> Arc<FfiKeyspace> {
+        Arc::new(FfiKeyspace {
+            inner: self.inner.inner().clone(),
+        })
+    }
+
+    /// Inserts a key-value pair (as its own transaction).
+    pub fn insert(&self, key: Vec<u8>, value: Vec<u8>) -> FfiResult<()> {
+        self.inner.insert(key, value)?;
+        Ok(())
+    }
+
+    /// Retrieves the value for a key.
+    pub fn get(&self, key: Vec<u8>) -> FfiResult<Option<Vec<u8>>> {
+        Ok(self.inner.get(key)?.map(|value| value.to_vec()))
+    }
+
+    /// Removes a key (as its own transaction).
+    pub fn remove(&self, key: Vec<u8>) -> FfiResult<()> {
+        self.inner.remove(key)?;
+        Ok(())
+    }
+
+    /// Removes a key with a weak tombstone (experimental; see fjall docs).
+    pub fn remove_weak(&self, key: Vec<u8>) -> FfiResult<()> {
+        self.inner.remove_weak(key)?;
+        Ok(())
+    }
+
+    /// Atomically removes an item and returns its value, if it existed.
+    pub fn take(&self, key: Vec<u8>) -> FfiResult<Option<Vec<u8>>> {
+        Ok(self.inner.take(key)?.map(|value| value.to_vec()))
+    }
+
+    /// Returns true if the key exists.
+    pub fn contains_key(&self, key: Vec<u8>) -> FfiResult<bool> {
+        Ok(self.inner.contains_key(key)?)
+    }
+
+    /// Size of the value for a key in bytes, without fetching it.
+    pub fn size_of(&self, key: Vec<u8>) -> FfiResult<Option<u32>> {
+        Ok(self.inner.size_of(key)?)
+    }
+
+    /// The first (minimum) key-value pair.
+    pub fn first_key_value(&self) -> FfiResult<Option<FfiKvPair>> {
+        guard_to_pair(self.inner.first_key_value())
+    }
+
+    /// The last (maximum) key-value pair.
+    pub fn last_key_value(&self) -> FfiResult<Option<FfiKvPair>> {
+        guard_to_pair(self.inner.last_key_value())
+    }
+
+    /// Fast approximation of the number of items (O(1), may overcount).
+    pub fn approximate_len(&self) -> u64 {
+        self.inner.approximate_len() as u64
+    }
+}
+
+/// An optimistic write transaction, mirrors `fjall::OptimisticWriteTx`.
+///
+/// Contains `None` after commit or rollback.
+#[derive(uniffi::Object)]
+pub struct FfiOptimisticTx {
+    inner: Mutex<Option<fjall::OptimisticWriteTx>>,
+}
+
+impl FfiOptimisticTx {
+    fn with_tx<R>(
+        &self,
+        op: impl FnOnce(&mut fjall::OptimisticWriteTx) -> FfiResult<R>,
+    ) -> FfiResult<R> {
+        let mut guard = self.inner.lock().map_err(|_| FfiError::Poisoned)?;
+        match guard.as_mut() {
+            None => Err(FfiError::TransactionConsumed),
+            Some(tx) => op(tx),
+        }
+    }
+}
+
+#[uniffi::export]
+impl FfiOptimisticTx {
+    /// Retrieves the value for a key, seeing the transaction's own writes.
+    pub fn get(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        key: Vec<u8>,
+    ) -> FfiResult<Option<Vec<u8>>> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(tx.get(&keyspace.inner, key)?.map(|value| value.to_vec()))
+        })
+    }
+
+    /// Returns true if the key exists.
+    pub fn contains_key(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        key: Vec<u8>,
+    ) -> FfiResult<bool> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(tx.contains_key(&keyspace.inner, key)?)
+        })
+    }
+
+    /// Size of the value for a key in bytes.
+    pub fn size_of(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        key: Vec<u8>,
+    ) -> FfiResult<Option<u32>> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(tx.size_of(&keyspace.inner, key)?)
+        })
+    }
+
+    /// Exact number of items visible to this transaction (full scan).
+    pub fn len(&self, keyspace: Arc<FfiOptimisticTxKeyspace>) -> FfiResult<u64> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(tx.len(&keyspace.inner)? as u64)
+        })
+    }
+
+    /// Returns true if the keyspace is empty as seen by this transaction.
+    pub fn is_empty(&self, keyspace: Arc<FfiOptimisticTxKeyspace>) -> FfiResult<bool> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(tx.is_empty(&keyspace.inner)?)
+        })
+    }
+
+    /// The first (minimum) key-value pair visible to this transaction.
+    pub fn first_key_value(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+    ) -> FfiResult<Option<FfiKvPair>> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            guard_to_pair(tx.first_key_value(&keyspace.inner))
+        })
+    }
+
+    /// The last (maximum) key-value pair visible to this transaction.
+    pub fn last_key_value(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+    ) -> FfiResult<Option<FfiKvPair>> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            guard_to_pair(tx.last_key_value(&keyspace.inner))
+        })
+    }
+
+    /// Iterates over the keyspace, including the transaction's own writes.
+    pub fn iter(&self, keyspace: Arc<FfiOptimisticTxKeyspace>) -> FfiResult<Arc<FfiIterator>> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(FfiIterator::new(tx.iter(&keyspace.inner)))
+        })
+    }
+
+    /// Iterates over a key range, including the transaction's own writes.
+    pub fn range(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        lower: Option<FfiBound>,
+        upper: Option<FfiBound>,
+    ) -> FfiResult<Arc<FfiIterator>> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(FfiIterator::new(tx.range::<Vec<u8>, _>(
+                &keyspace.inner,
+                (to_bound(lower), to_bound(upper)),
+            )))
+        })
+    }
+
+    /// Iterates over all keys with the given prefix, including the
+    /// transaction's own writes.
+    pub fn prefix(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        prefix: Vec<u8>,
+    ) -> FfiResult<Arc<FfiIterator>> {
+        self.with_tx(|tx| {
+            use fjall::Readable;
+            Ok(FfiIterator::new(tx.prefix(&keyspace.inner, prefix)))
+        })
+    }
+
+    /// Stages an insert.
+    pub fn insert(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    ) -> FfiResult<()> {
+        self.with_tx(|tx| {
+            tx.insert(&keyspace.inner, key, value);
+            Ok(())
+        })
+    }
+
+    /// Stages a removal.
+    pub fn remove(&self, keyspace: Arc<FfiOptimisticTxKeyspace>, key: Vec<u8>) -> FfiResult<()> {
+        self.with_tx(|tx| {
+            tx.remove(&keyspace.inner, key);
+            Ok(())
+        })
+    }
+
+    /// Stages a weak removal (experimental; see fjall docs).
+    pub fn remove_weak(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        key: Vec<u8>,
+    ) -> FfiResult<()> {
+        self.with_tx(|tx| {
+            tx.remove_weak(&keyspace.inner, key);
+            Ok(())
+        })
+    }
+
+    /// Removes an item and returns its value, if it existed.
+    pub fn take(
+        &self,
+        keyspace: Arc<FfiOptimisticTxKeyspace>,
+        key: Vec<u8>,
+    ) -> FfiResult<Option<Vec<u8>>> {
+        self.with_tx(|tx| Ok(tx.take(&keyspace.inner, key)?.map(|value| value.to_vec())))
+    }
+
+    /// Sets the durability level used when the transaction commits.
+    pub fn set_durability(&self, mode: Option<FfiPersistMode>) -> FfiResult<()> {
+        let mut guard = self.inner.lock().map_err(|_| FfiError::Poisoned)?;
+        match guard.take() {
+            None => Err(FfiError::TransactionConsumed),
+            Some(tx) => {
+                *guard = Some(tx.durability(mode.map(Into::into)));
+                Ok(())
+            }
+        }
+    }
+
+    /// Commits the transaction.
+    ///
+    /// Fails with a conflict error if another transaction modified the same
+    /// keys since this transaction started. The transaction cannot be used
+    /// afterwards.
+    pub fn commit(&self) -> FfiResult<()> {
+        let mut guard = self.inner.lock().map_err(|_| FfiError::Poisoned)?;
+        match guard.take() {
+            None => Err(FfiError::TransactionConsumed),
+            Some(tx) => match tx.commit()? {
+                Ok(()) => Ok(()),
+                Err(fjall::Conflict) => Err(FfiError::Conflict),
+            },
+        }
+    }
+
+    /// Rolls the transaction back, discarding all staged changes.
+    pub fn rollback(&self) -> FfiResult<()> {
+        let mut guard = self.inner.lock().map_err(|_| FfiError::Poisoned)?;
+        match guard.take() {
+            None => Err(FfiError::TransactionConsumed),
+            Some(tx) => {
+                tx.rollback();
+                Ok(())
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -829,6 +1685,110 @@ mod tests {
         );
 
         db.persist(FfiPersistMode::SyncAll).unwrap();
+    }
+
+    #[test]
+    fn single_writer_transactions() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = FfiTxDatabase::open(
+            dir.path().join("db").display().to_string(),
+            FfiDatabaseConfig::default(),
+        )
+        .unwrap();
+        let ks = db
+            .keyspace("items".into(), FfiKeyspaceOptions::default())
+            .unwrap();
+
+        // Direct (auto-transaction) operations.
+        ks.insert(b"a".to_vec(), b"1".to_vec()).unwrap();
+        assert_eq!(ks.get(b"a".to_vec()).unwrap(), Some(b"1".to_vec()));
+        assert_eq!(ks.take(b"a".to_vec()).unwrap(), Some(b"1".to_vec()));
+        assert_eq!(ks.get(b"a".to_vec()).unwrap(), None);
+
+        // Committed transaction with read-your-own-writes.
+        let tx = db.write_tx().unwrap();
+        tx.insert(ks.clone(), b"x".to_vec(), b"1".to_vec()).unwrap();
+        assert_eq!(
+            tx.get(ks.clone(), b"x".to_vec()).unwrap(),
+            Some(b"1".to_vec())
+        );
+        // Not visible outside the transaction yet.
+        assert_eq!(ks.get(b"x".to_vec()).unwrap(), None);
+        let iter = tx.iter(ks.clone()).unwrap();
+        assert_eq!(iter.next_many(10).unwrap().len(), 1);
+        tx.commit().unwrap();
+        assert_eq!(ks.get(b"x".to_vec()).unwrap(), Some(b"1".to_vec()));
+        assert!(matches!(
+            tx.commit(),
+            Err(FfiError::TransactionConsumed)
+        ));
+
+        // Rolled-back transaction.
+        let tx = db.write_tx().unwrap();
+        tx.insert(ks.clone(), b"y".to_vec(), b"2".to_vec()).unwrap();
+        tx.rollback().unwrap();
+        assert_eq!(ks.get(b"y".to_vec()).unwrap(), None);
+        assert!(matches!(
+            tx.insert(ks.clone(), b"z".to_vec(), b"3".to_vec()),
+            Err(FfiError::TransactionConsumed)
+        ));
+
+        // Dropping a transaction without commit rolls it back.
+        {
+            let tx = db.write_tx().unwrap();
+            tx.insert(ks.clone(), b"dropped".to_vec(), b"1".to_vec())
+                .unwrap();
+            drop(tx);
+        }
+        // A new write tx can start (the single-writer lock was released)
+        // and does not see the dropped write.
+        let tx = db.write_tx().unwrap();
+        assert_eq!(tx.get(ks.clone(), b"dropped".to_vec()).unwrap(), None);
+        tx.rollback().unwrap();
+
+        // Read transaction (snapshot) via base keyspace handle.
+        let read = db.read_tx();
+        assert_eq!(
+            read.get(ks.base(), b"x".to_vec()).unwrap(),
+            Some(b"1".to_vec())
+        );
+    }
+
+    #[test]
+    fn optimistic_transactions() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = FfiOptimisticTxDatabase::open(
+            dir.path().join("db").display().to_string(),
+            FfiDatabaseConfig::default(),
+        )
+        .unwrap();
+        let ks = db
+            .keyspace("items".into(), FfiKeyspaceOptions::default())
+            .unwrap();
+
+        // Non-conflicting transaction commits fine.
+        let tx = db.write_tx().unwrap();
+        tx.insert(ks.clone(), b"a".to_vec(), b"1".to_vec()).unwrap();
+        assert_eq!(
+            tx.get(ks.clone(), b"a".to_vec()).unwrap(),
+            Some(b"1".to_vec())
+        );
+        tx.commit().unwrap();
+        assert_eq!(ks.get(b"a".to_vec()).unwrap(), Some(b"1".to_vec()));
+
+        // Two transactions read-modify-writing the same key: the second
+        // commit conflicts.
+        let tx1 = db.write_tx().unwrap();
+        let tx2 = db.write_tx().unwrap();
+        let v1 = tx1.get(ks.clone(), b"a".to_vec()).unwrap().unwrap();
+        let v2 = tx2.get(ks.clone(), b"a".to_vec()).unwrap().unwrap();
+        tx1.insert(ks.clone(), b"a".to_vec(), [v1, b"+1".to_vec()].concat())
+            .unwrap();
+        tx2.insert(ks.clone(), b"a".to_vec(), [v2, b"+2".to_vec()].concat())
+            .unwrap();
+        tx2.commit().unwrap();
+        assert!(matches!(tx1.commit(), Err(FfiError::Conflict)));
+        assert_eq!(ks.get(b"a".to_vec()).unwrap(), Some(b"1+2".to_vec()));
     }
 
     #[test]
