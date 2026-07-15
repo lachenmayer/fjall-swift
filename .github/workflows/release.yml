@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes a release: builds the full FjallFFI.xcframework, points
+# Publishes a release. Builds the full FjallFFI.xcframework, points
 # Package.swift at the uploaded artifact, commits, tags, and creates a
 # GitHub release with the framework attached.
 on:
