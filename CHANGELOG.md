@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Order-preserving integer key encoding: `Data(orderPreservingKey:)` and a
+  matching failable decoder for any `FixedWidthInteger` (fixed-width,
+  big-endian, sign bit flipped for signed types, so byte order equals
+  numeric order), plus integer overloads on `Bound` for range scans
+
 ## 0.1.0
 
 Initial release, wrapping [fjall](https://github.com/fjall-rs/fjall) 3.1.
