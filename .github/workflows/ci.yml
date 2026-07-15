@@ -40,6 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
+        shell: bash
         run: |
           set -euo pipefail
           apt-get update
