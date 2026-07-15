@@ -7,14 +7,19 @@ cd "$(dirname "$0")/.."
 cargo build --manifest-path rust/Cargo.toml
 
 case "$(uname -s)" in
-  Darwin) LIB="rust/target/debug/libfjall_ffi.dylib" ;;
-  *) LIB="rust/target/debug/libfjall_ffi.so" ;;
+  Darwin) LIB="target/debug/libfjall_ffi.dylib" ;;
+  *) LIB="target/debug/libfjall_ffi.so" ;;
 esac
 
-OUT=rust/target/uniffi-bindings
-cargo run --manifest-path rust/Cargo.toml --bin uniffi-bindgen -- \
-  generate --library "$LIB" --language swift --out-dir "$OUT"
+# uniffi-bindgen resolves the crate via `cargo metadata`, so it must run
+# from inside the crate directory.
+(
+  cd rust
+  cargo run --bin uniffi-bindgen -- \
+    generate --library "$LIB" --language swift --out-dir target/uniffi-bindings
+)
 
+OUT=rust/target/uniffi-bindings
 mkdir -p Sources/FjallFFI Sources/CFjallFFI
 cp "$OUT/FjallFFI.swift" Sources/FjallFFI/FjallFFI.swift
 cp "$OUT/CFjallFFI.h" Sources/CFjallFFI/CFjallFFI.h
