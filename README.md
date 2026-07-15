@@ -117,6 +117,35 @@ try db.write(attempts: 5) { tx in
 }
 ```
 
+#### Single-writer vs. optimistic: which to use?
+
+Both give you serializable, cross-keyspace transactions with read-your-own-writes;
+they differ in how concurrent writers are handled.
+
+|  | `TxDatabase` (single-writer) | `OptimisticTxDatabase` (SSI) |
+|---|---|---|
+| Concurrency model | Pessimistic: one write transaction at a time; starting a second **blocks** until the first finishes | Optimistic: write transactions run **concurrently**; conflicts are detected at commit |
+| Commit | Always succeeds (barring I/O errors) | Throws `FjallError.conflict` if another transaction touched the same keys — retry the whole transaction (`write(attempts:)` does this for you) |
+| Best for | Low write concurrency; workloads where retry logic is unwelcome; transactions that must not fail spuriously | Many concurrent writers that mostly touch *different* keys; read-heavy transactions |
+| Worst case | A long transaction stalls every other writer (readers are never blocked) | High contention on the same keys wastes work: transactions repeatedly execute, conflict, and retry |
+| Read transactions | Never block, in either mode (MVCC snapshots) | Same |
+| Wrapper overhead | Each write transaction runs on a dedicated Rust worker thread, and every operation is a synchronous message to it (~µs). This is how the wrapper bridges fjall's lock-holding transaction type across the FFI boundary; it preserves fjall's exact blocking semantics, including rollback + lock release when a transaction is discarded uncommitted | None beyond the FFI call itself — the transaction object crosses the boundary directly |
+
+Rules of thumb:
+
+- Writers rarely overlap, or you want commits that never fail? → **`TxDatabase`**.
+- Many writers hitting mostly-disjoint keys? → **`OptimisticTxDatabase`** with
+  `write(attempts:)`.
+- Under heavy same-key contention neither shines — single-writer serializes everything,
+  optimistic burns retries — but single-writer at least guarantees forward progress
+  for each transaction, so prefer it there.
+- No transactions needed at all? Plain `Database` with `WriteBatch` is the fastest
+  option: batches are atomic on commit, they just don't let you read within the batch.
+
+One fjall-level caveat applies to both: transactions (and snapshots) pin old data —
+the garbage collector cannot reclaim versions a live transaction might still read —
+so keep them short-lived.
+
 ### Configuration
 
 ```swift
