@@ -23,8 +23,8 @@ ffiTarget = .systemLibrary(
 #else
 // NOTE: url + checksum are rewritten by the release workflow
 // (see .github/workflows/release.yml) whenever a version is tagged.
-let releaseURL = "https://github.com/lachenmayer/fjall-swift/releases/download/v0.1.0/FjallFFI.xcframework.zip"
-let releaseChecksum = "ff78bf1b36063bfed29779a90f25e381b70015fff665bc5bb97e023da8992e15"
+let releaseURL = "https://github.com/lachenmayer/fjall-swift/releases/download/v0.1.1/FjallFFI.xcframework.zip"
+let releaseChecksum = "db77a8b8e96fb07752c493be791a2453120e1e8f38862ea8dd29af846c6c6968"
 
 let useLocalFramework =
     ProcessInfo.processInfo.environment["FJALL_USE_LOCAL_FRAMEWORK"] != nil
