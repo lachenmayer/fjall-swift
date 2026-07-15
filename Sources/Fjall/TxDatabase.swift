@@ -214,6 +214,11 @@ extension TxKeyspace {
     public func containsKey(_ key: String) throws -> Bool {
         try containsKey(Data(key.utf8))
     }
+
+    /// Size of the value for a UTF-8 string key, in bytes.
+    public func size(of key: String) throws -> Int? {
+        try size(of: Data(key.utf8))
+    }
 }
 
 /// A single-writer write transaction, mirrors `fjall::SingleWriterWriteTx`.

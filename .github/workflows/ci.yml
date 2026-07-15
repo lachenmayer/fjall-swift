@@ -52,7 +52,11 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           "$HOME/.cargo/bin/cargo" --version
       - name: Build Rust static library
-        run: cargo build --manifest-path rust/Cargo.toml --release
+        run: |
+          cargo build --manifest-path rust/Cargo.toml --release
+          # The crate also builds a cdylib; remove it so the linker picks the
+          # static library and the test binary needs no LD_LIBRARY_PATH.
+          rm -f rust/target/release/libfjall_ffi.so
       - name: Swift tests
         run: swift test -Xlinker -L"$PWD/rust/target/release"
 
