@@ -79,6 +79,33 @@ try snapshot.containsKey("later", in: items)  // false
 try db.persist(.syncAll)
 ```
 
+### Integer keys
+
+fjall orders keys by **raw byte comparison**, so integer keys must be encoded
+fixed-width and big-endian to iterate in numeric order — and signed integers
+additionally need their sign bit flipped (otherwise negative values, whose high
+bit is set, would sort after positive ones). `Data(orderPreservingKey:)` does
+all of this for any `FixedWidthInteger`:
+
+```swift
+// Sequential IDs as keys:
+try items.insert(Data(orderPreservingKey: UInt64(42)), payload)
+
+// Iterates in numeric order: 1, 5, 42, 256, 1000, ...
+while let pair = try items.iter().next() {
+    let id = UInt64(orderPreservingKey: pair.key)!
+    ...
+}
+
+// Range scans take integer bounds directly:
+let recent = try items.range(from: .included(UInt64(1_000))).collect()
+```
+
+Stick to one integer type per keyspace: keys of different widths (e.g. a
+`UInt32` next to a `UInt64`) do not sort meaningfully against each other.
+The last inserted ID can be recovered after reopening with
+`UInt64(orderPreservingKey: try items.last!.key)`.
+
 ### Transactions
 
 For cross-keyspace transactions with read-your-own-writes semantics, open the database
